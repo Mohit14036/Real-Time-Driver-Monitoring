@@ -6,6 +6,7 @@ module rgb_systolic_array_3x3 #(
     input wire clk,
     input wire rst,
     input wire load_weight,
+    input wire total_window_done,
 
     // Each color has 3x1 inputs per clock (3 rows)
     input wire [3*DATA_WIDTH-1:0] input_col_r,
@@ -57,7 +58,7 @@ module rgb_systolic_array_3x3 #(
 
     // Sum all three outputs
     always @(posedge clk or posedge rst) begin
-        if (rst)
+        if (rst || total_window_done)
             conv_out_rgb <= 0;
         else begin
             conv_out_rgb <= conv_r + conv_g + conv_b;
