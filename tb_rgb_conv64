@@ -126,7 +126,7 @@ end
 
 
         $fclose(out_file);
-        $display("✅ Output written to output_112x112x64.txt");
+        $display("Output written to output_112x112x64.txt");
         $finish;
     end
 
