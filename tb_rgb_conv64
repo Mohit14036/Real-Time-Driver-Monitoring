@@ -3,21 +3,21 @@
 module tb_rgb_conv64;
 
     parameter DATA_WIDTH = 8;
-    parameter HEIGHT = 224;
-    parameter WIDTH = 224;
+    parameter HEIGHT = 5;
+    parameter WIDTH = 5;
     parameter NUM_FILTERS = 64;
 
     reg clk, rst, load_weight;
-    reg [3*DATA_WIDTH-1:0] input_col_r, input_col_g, input_col_b;
+    reg [DATA_WIDTH-1:0] pixel_in_r, pixel_in_g, pixel_in_b;
+    reg pixel_valid_r, pixel_valid_g, pixel_valid_b;
     //reg [9*DATA_WIDTH-1:0] weights_r, weights_g, weights_b;
     wire [NUM_FILTERS*(2*DATA_WIDTH+6)-1:0] conv_outs;
 
-    reg [7:0] image_r [0:224*224-1];
-    reg [7:0] image_g [0:224*224-1];
-    reg [7:0] image_b [0:224*224-1];
+    reg [7:0] image_r [0:25-1];
+    reg [7:0] image_g [0:25-1];
+    reg [7:0] image_b [0:25-1];
 
-    integer row, col, f,count,padding,pc;
-    integer out_file;
+    integer out_file, i;
 
     // Clock generation
     always #5 clk = ~clk;
@@ -39,9 +39,12 @@ module tb_rgb_conv64;
         .clk(clk),
         .rst(rst),
         .load_weight(load_weight),
-        .input_col_r(input_col_r),
-        .input_col_g(input_col_g),
-        .input_col_b(input_col_b),
+        .pixel_in_r(pixel_in_r),
+        .pixel_in_g(pixel_in_g),
+        .pixel_in_b(pixel_in_b),
+        .pixel_valid_r(pixel_valid_r),
+        .pixel_valid_g(pixel_valid_g),
+        .pixel_valid_b(pixel_valid_b),
         //.weights_r_all(weights_r_all),
         //.weights_g_all(weights_g_all),
         //.weights_b_all(weights_b_all),
@@ -61,68 +64,43 @@ module tb_rgb_conv64;
 
         // Wait and release reset
         #20 rst = 0;
-
+        
+        pixel_valid_r = 0;
+        pixel_valid_g = 0;
+        pixel_valid_b = 0;
+        
         // Load image from memory files
-        $readmemh("/home/mohit/Downloads/image_r.mem", image_r);
-        $readmemh("/home/mohit/Downloads/image_g.mem", image_g);
-        $readmemh("/home/mohit/Downloads/image_b.mem", image_b);
+        $readmemh("/home/ihs03/pixel_level_systolic_array/image_r.mem", image_r);
+        $readmemh("/home/ihs03/pixel_level_systolic_array/image_g.mem", image_g);
+        $readmemh("/home/ihs03/pixel_level_systolic_array/image_b.mem", image_b);
        @(posedge clk);
         // Load weights
         load_weight = 1;
         @(posedge clk);
         load_weight = 0;
+        
+        
 
         // Wait a few cycles to stabilize weights inside systolic array
         repeat (5) @(posedge clk);
 
         // Open output file
-        out_file = $fopen("/home/mohit/Downloads/output_112x112x64.txt", "w");
+        out_file = $fopen("/home/ihs03/pixel_level_systolic_array/output_112x112x64.txt", "w");
 
-        // Feed data column by column (width - 2 due to 3x3 kernel)
-        count=0;
-        pc=0;
-        // Stride-2 with padding=1
-padding = 1;
-
-for (row = -padding; row < HEIGHT + padding - 2; row = row + 2) begin
-    for (col = -padding; col < WIDTH + padding - 2; col = col + 1) begin
-        @(posedge clk);
-
-        // Prepare input columns with padding check
-        input_col_r = {
-            (row   < 0 || row   >= HEIGHT || col < 0 || col >= WIDTH) ? 8'd0 : image_r[row*WIDTH + col],
-            (row+1 < 0 || row+1 >= HEIGHT || col < 0 || col >= WIDTH) ? 8'd0 : image_r[(row+1)*WIDTH + col],
-            (row+2 < 0 || row+2 >= HEIGHT || col < 0 || col >= WIDTH) ? 8'd0 : image_r[(row+2)*WIDTH + col]
-        };
-
-        input_col_g = {
-            (row   < 0 || row   >= HEIGHT || col < 0 || col >= WIDTH) ? 8'd0 : image_g[row*WIDTH + col],
-            (row+1 < 0 || row+1 >= HEIGHT || col < 0 || col >= WIDTH) ? 8'd0 : image_g[(row+1)*WIDTH + col],
-            (row+2 < 0 || row+2 >= HEIGHT || col < 0 || col >= WIDTH) ? 8'd0 : image_g[(row+2)*WIDTH + col]
-        };
-
-        input_col_b = {
-            (row   < 0 || row   >= HEIGHT || col < 0 || col >= WIDTH) ? 8'd0 : image_b[row*WIDTH + col],
-            (row+1 < 0 || row+1 >= HEIGHT || col < 0 || col >= WIDTH) ? 8'd0 : image_b[(row+1)*WIDTH + col],
-            (row+2 < 0 || row+2 >= HEIGHT || col < 0 || col >= WIDTH) ? 8'd0 : image_b[(row+2)*WIDTH + col]
-        };
-
-        count = count + 1;
-
-        // Reset count at the end of a row
-        if (col == WIDTH + padding - 3)
-            count = 0;
-
-        // Write output only every 2 columns
-        if (count % 3 == 0 && col != WIDTH + padding - 3 && count != 0) begin
-            for (f = 0; f < NUM_FILTERS; f = f + 1) begin
-                $fwrite(out_file, "%0d ", conv_outs[(f+1)*(2*DATA_WIDTH+6)-1 -: (2*DATA_WIDTH+6)]);
-            end
-            $fwrite(out_file, "\n");
-            count=1;
+        
+        for(i = 0; i < WIDTH*HEIGHT; i=i+1) begin
+        
+            @(posedge clk);
+        
+            pixel_in_r = image_r[i];
+            pixel_in_g = image_g[i];
+            pixel_in_b = image_b[i];
+            
+            pixel_valid_r = 1;
+            pixel_valid_g = 1;
+            pixel_valid_b = 1;
+        
         end
-    end
-end
 
 
         $fclose(out_file);
