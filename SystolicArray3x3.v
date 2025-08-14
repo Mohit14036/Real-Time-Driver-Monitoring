@@ -6,6 +6,7 @@ module systolic_array_3x3 #(
     input wire clk,
     input wire rst,
     input wire load_weight,
+    
 
     input wire [3*DATA_WIDTH-1:0] input_col,       // 3 values per clock: one column
     input wire [9*DATA_WIDTH-1:0] filter_weights,  // 3x3 kernel weights
@@ -56,9 +57,9 @@ module systolic_array_3x3 #(
 
     // Output accumulation from last column only (PE[0][2], PE[1][2], PE[2][2])
     always @(posedge clk or posedge rst) begin
-        if (rst)
+        if (rst) begin
             conv_out <= 0;
-        else begin
+        end else begin
             conv_out <= psum_wires[0][2] + psum_wires[1][2] + psum_wires[2][2]+psum_wires[0][1] + psum_wires[1][1] + psum_wires[2][1]+psum_wires[0][0] + psum_wires[1][0] + psum_wires[2][0];
             //$display("Time: %0t | Convolution Output: %0d", $time, conv_out);
         end
