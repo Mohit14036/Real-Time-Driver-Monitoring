@@ -32,7 +32,7 @@ module rgb_window_generator #(
     reg [DATA_WIDTH-1:0] shift_reg_b [1:0][IMAGE_SIZE-1:0];
     
     //minimum number of pixels that should arrive to start window generation for a kernel size of 3 for a prepadded image
-    integer start_window_pixel_count  = (2*IMAGE_SIZE)+1; 
+    integer start_window_pixel_count  = (2*IMAGE_SIZE); 
     
     //counters
     integer  pixel_count = 0;
