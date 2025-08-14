@@ -48,7 +48,7 @@ module tb_rgb_conv64;
         //.weights_r_all(weights_r_all),
         //.weights_g_all(weights_g_all),
         //.weights_b_all(weights_b_all),
-        .conv_outs(conv_outs)
+        .conv_outs_2(conv_outs)
     );
 
     // Initial block
