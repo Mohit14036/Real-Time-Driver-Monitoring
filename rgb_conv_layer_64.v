@@ -12,6 +12,11 @@ module rgb_conv_layer_64 #(
     input wire [DATA_WIDTH-1:0] pixel_in_g,
     input wire [DATA_WIDTH-1:0] pixel_in_b,
     
+    
+    input wire [3*DATA_WIDTH-1:0] input_col_r,
+    input wire [3*DATA_WIDTH-1:0] input_col_g,
+    input wire [3*DATA_WIDTH-1:0] input_col_b,
+    
     input pixel_valid_r,
     input pixel_valid_g,
     input pixel_valid_b,
