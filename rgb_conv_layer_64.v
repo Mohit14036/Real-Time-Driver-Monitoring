@@ -82,12 +82,12 @@ module rgb_conv_layer_64 #(
                 if (rst) begin
                     conv_outs[(i+1)*(2*DATA_WIDTH+6)-1 -: (2*DATA_WIDTH+6)] <= 0;
                     conv_outs_2_valid <= 0;
-                end else if (conv_valid_i) begin   // ✅ only latch when valid
+                end else if (conv_valid_i) begin   // only latch when valid
                     conv_outs[(i+1)*(2*DATA_WIDTH+6)-1 -: (2*DATA_WIDTH+6)] <= conv_out_i;
                     conv_outs_2_valid <= 1; 
                 end
                 else begin
-                    conv_outs_2_valid <= 0;  // ✅ not valid
+                    conv_outs_2_valid <= 0;  //  not valid
                 end
             end
             //assign conv_outs_2[(i+1)*(2*DATA_WIDTH+6)-1 -: (2*DATA_WIDTH+6)] = conv_out_i;
