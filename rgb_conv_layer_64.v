@@ -17,7 +17,9 @@ module rgb_conv_layer_64 #(
     input pixel_valid_b,
 
     // Output of 64 parallel convolutions
-    output wire [3*(2*(2*DATA_WIDTH+6)+6)-1:0] conv_outs_2
+    output reg [3*(2*(2*DATA_WIDTH+6)+6)-1:0] conv_outs_2,
+    //output reg [3*(2*DATA_WIDTH+6)-1:0] conv_outs_2,
+    output reg conv_outs_2_valid
 );
 
     // Constant 9x1s vector for weights per channel (72 bits if DATA_WIDTH = 8)
@@ -25,13 +27,13 @@ module rgb_conv_layer_64 #(
     
     wire total_window_done;
     wire start_conv;
-    
+    wire col;
     wire [3*DATA_WIDTH-1:0] input_col_r;
     wire [3*DATA_WIDTH-1:0] input_col_g;
     wire [3*DATA_WIDTH-1:0] input_col_b;
     
-    wire [3*(2*DATA_WIDTH+6)-1:0] conv_outs;
-    
+    reg [3*(2*DATA_WIDTH+6)-1:0] conv_outs;
+    wire take_col;
     rgb_window_generator #(.DATA_WIDTH(DATA_WIDTH)) window (
             
                 .clk(clk),
@@ -46,8 +48,9 @@ module rgb_conv_layer_64 #(
                 .output_col_g(input_col_g),
                 .output_col_b(input_col_b),
                 .done(total_window_done),
-                .start_conv(start_conv)
-            
+                .start_conv(start_conv),
+                .col(col),
+                .take_col(take_col)
             );
 
     genvar i;
@@ -58,12 +61,12 @@ module rgb_conv_layer_64 #(
             wire [9*DATA_WIDTH-1:0] wb = CONST_ONES;
 
             wire signed [2*DATA_WIDTH+5:0] conv_out_i;
-
+            wire conv_valid_i;
             rgb_systolic_array_3x3 #(.DATA_WIDTH(DATA_WIDTH)) conv_unit (
                 .clk(clk),
                 .rst(rst),
                 .start_conv(start_conv),
-                .total_window_done(total_window_done),
+            
                 .load_weight(load_weight),
                 .input_col_r(input_col_r),
                 .input_col_g(input_col_g),
@@ -71,16 +74,29 @@ module rgb_conv_layer_64 #(
                 .weights_r(wr),
                 .weights_g(wg),
                 .weights_b(wb),
-                .conv_out_rgb(conv_out_i)
+                .conv_out_rgb(conv_out_i),
+                .conv_out_rgb_valid(conv_valid_i),
+                .col(col)
             );
-
-            assign conv_outs[(i+1)*(2*DATA_WIDTH+6)-1 -: (2*DATA_WIDTH+6)] = conv_out_i;
+            always @(posedge clk or posedge rst) begin
+                if (rst) begin
+                    conv_outs[(i+1)*(2*DATA_WIDTH+6)-1 -: (2*DATA_WIDTH+6)] <= 0;
+                    conv_outs_2_valid <= 0;
+                end else if (conv_valid_i) begin   // ✅ only latch when valid
+                    conv_outs[(i+1)*(2*DATA_WIDTH+6)-1 -: (2*DATA_WIDTH+6)] <= conv_out_i;
+                    conv_outs_2_valid <= 1; 
+                end
+                else begin
+                    conv_outs_2_valid <= 0;  // ✅ not valid
+                end
+            end
+            //assign conv_outs_2[(i+1)*(2*DATA_WIDTH+6)-1 -: (2*DATA_WIDTH+6)] = conv_out_i;
         end
     endgenerate
-    
-    wire [(2*DATA_WIDTH+6)-1:0] pixel_in_r_2;
-    wire [(2*DATA_WIDTH+6)-1:0] pixel_in_g_2;
-    wire [(2*DATA_WIDTH+6)-1:0] pixel_in_b_2;
+   
+    reg [(2*DATA_WIDTH+6)-1:0] pixel_in_r_2;
+    reg [(2*DATA_WIDTH+6)-1:0] pixel_in_g_2;
+    reg [(2*DATA_WIDTH+6)-1:0] pixel_in_b_2;
     
     reg pixel_valid_r_2;
     reg pixel_valid_g_2;
@@ -94,20 +110,34 @@ module rgb_conv_layer_64 #(
     wire start_conv_2;
     
     always @(posedge clk) begin
+        if (rst) begin
+            pixel_in_r_2 <= 0;
+            pixel_in_g_2 <= 0;
+            pixel_in_b_2 <= 0;
+            pixel_valid_r_2 <= 0;
+            pixel_valid_g_2 <= 0;
+            pixel_valid_b_2 <= 0;
+        end else if (conv_outs_2_valid) begin
+            
+            pixel_in_r_2 <= conv_outs[(1)*(2*DATA_WIDTH+6)-1 -: (2*DATA_WIDTH+6)];
+            pixel_in_g_2 <= conv_outs[(2)*(2*DATA_WIDTH+6)-1 -: (2*DATA_WIDTH+6)];
+            pixel_in_b_2 <= conv_outs[(3)*(2*DATA_WIDTH+6)-1 -: (2*DATA_WIDTH+6)];
     
-        pixel_valid_r_2 <= conv_outs[(1)*(2*DATA_WIDTH+6)-1 -: (2*DATA_WIDTH+6)];
-        pixel_valid_g_2 <= conv_outs[(2)*(2*DATA_WIDTH+6)-1 -: (2*DATA_WIDTH+6)];
-        pixel_valid_b_2 <= conv_outs[(3)*(2*DATA_WIDTH+6)-1 -: (2*DATA_WIDTH+6)];
-        
-         pixel_valid_r_2 <= 1;
-         pixel_valid_g_2 <= 1;
-         pixel_valid_b_2 <= 1;
+            // Set valid flags
+            pixel_valid_r_2 <= 1;
+            pixel_valid_g_2 <= 1;
+            pixel_valid_b_2 <= 1;
+        end else begin
+            pixel_valid_r_2 <= 0;
+            pixel_valid_g_2 <= 0;
+            pixel_valid_b_2 <= 0;
+        end
+    end
+
     
-    end 
+    wire col1,conv_valid_i1;
     
-    
-    
-    rgb_window_generator #(.DATA_WIDTH((2*DATA_WIDTH+6))) window1 (
+    rgb_window_generator #(.DATA_WIDTH((2*DATA_WIDTH+6)),.IMAGE_SIZE(222)) window1 (
             
                 .clk(clk),
                 .rst(rst),
@@ -121,8 +151,9 @@ module rgb_conv_layer_64 #(
                 .output_col_g(input_col_g_2),
                 .output_col_b(input_col_b_2),
                 .done(total_window_done_2),
-                .start_conv(start_conv_2)
-            
+                .start_conv(start_conv_2),
+                .col(col1)
+               
             );
 
     genvar j;
@@ -134,11 +165,10 @@ module rgb_conv_layer_64 #(
 
             wire signed [2*(2*DATA_WIDTH+6)+5:0] conv_out_i_2;
 
-            rgb_systolic_array_3x3 #(.DATA_WIDTH((2*DATA_WIDTH+6))) conv_unit1 (
+            rgb_systolic_array_3x3 #(.DATA_WIDTH((2*DATA_WIDTH+6)),.OUTPUT_CYCLES(220)) conv_unit1 (
                 .clk(clk),
                 .rst(rst),
                 .start_conv(start_conv_2),
-                .total_window_done(total_window_done_2),
                 .load_weight(load_weight),
                 .input_col_r(input_col_r_2),
                 .input_col_g(input_col_g_2),
@@ -146,10 +176,20 @@ module rgb_conv_layer_64 #(
                 .weights_r(wr),
                 .weights_g(wg),
                 .weights_b(wb),
-                .conv_out_rgb(conv_out_i_2)
-            );
+                .conv_out_rgb(conv_out_i_2),
+                .col(col1),
+                .conv_out_rgb_valid(conv_valid_i1)
 
-            assign conv_outs_2[(j+1)*(2*DATA_WIDTH+6)-1 -: (2*DATA_WIDTH+6)] = conv_out_i_2;
+                
+            );
+            always @(posedge clk) begin
+            if (rst) begin
+                conv_outs_2[(j+1)*(2*(2*DATA_WIDTH+6)+6)-1 -: (2*(2*DATA_WIDTH+6)+6)] <= 0;
+            end else begin
+                conv_outs_2[(j+1)*(2*(2*DATA_WIDTH+6)+6)-1 -: (2*(2*DATA_WIDTH+6)+6)] <= conv_out_i_2;
+            end
+        end
+            //assign conv_outs_2[(j+1)*(2*DATA_WIDTH+6)-1 -: (2*DATA_WIDTH+6)] = conv_out_i_2;
         end
     endgenerate
     

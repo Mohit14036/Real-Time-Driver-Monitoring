@@ -30,7 +30,7 @@ module PE #(
             psum_out <= 0;
             data_out <= 0;
         end else begin
-            psum_out <= data_in * weight + psum_in;
+            psum_out <= data_in * weight ;
             data_out <= data_in;
             
 
