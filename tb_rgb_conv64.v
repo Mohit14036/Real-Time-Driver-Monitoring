@@ -3,21 +3,22 @@
 module tb_rgb_conv64;
 
     parameter DATA_WIDTH = 8;
-    parameter HEIGHT = 5;
-    parameter WIDTH = 5;
-    parameter NUM_FILTERS = 64;
+    parameter HEIGHT = 224;
+    parameter WIDTH =224;
+    parameter NUM_FILTERS = 3;
 
     reg clk, rst, load_weight;
     reg [DATA_WIDTH-1:0] pixel_in_r, pixel_in_g, pixel_in_b;
     reg pixel_valid_r, pixel_valid_g, pixel_valid_b;
     //reg [9*DATA_WIDTH-1:0] weights_r, weights_g, weights_b;
-    wire [NUM_FILTERS*(2*DATA_WIDTH+6)-1:0] conv_outs;
+    wire [3*(2*(2*DATA_WIDTH+6)+6)-1:0] conv_outs_f;
+    //wire [3*(2*DATA_WIDTH+6)-1:0] conv_outs_f;
+    wire conv_valid;
+    reg [7:0] image_r [0:WIDTH*HEIGHT-1];
+    reg [7:0] image_g [0:WIDTH*HEIGHT-1];
+    reg [7:0] image_b [0:WIDTH*HEIGHT-1];
 
-    reg [7:0] image_r [0:25-1];
-    reg [7:0] image_g [0:25-1];
-    reg [7:0] image_b [0:25-1];
-
-    integer out_file, i;
+    integer out_file, i,f;
 
     // Clock generation
     always #5 clk = ~clk;
@@ -48,7 +49,8 @@ module tb_rgb_conv64;
         //.weights_r_all(weights_r_all),
         //.weights_g_all(weights_g_all),
         //.weights_b_all(weights_b_all),
-        .conv_outs_2(conv_outs)
+        .conv_outs_2(conv_outs_f),
+        .conv_outs_2_valid(conv_valid)
     );
 
     // Initial block
@@ -70,9 +72,9 @@ module tb_rgb_conv64;
         pixel_valid_b = 0;
         
         // Load image from memory files
-        $readmemh("/home/ihs03/pixel_level_systolic_array/image_r.mem", image_r);
-        $readmemh("/home/ihs03/pixel_level_systolic_array/image_g.mem", image_g);
-        $readmemh("/home/ihs03/pixel_level_systolic_array/image_b.mem", image_b);
+        $readmemh("/home/mohit/Downloads/image_r.mem", image_r);
+        $readmemh("/home/mohit/Downloads/image_g.mem", image_g);
+        $readmemh("/home/mohit/Downloads/image_b.mem", image_b);
        @(posedge clk);
         // Load weights
         load_weight = 1;
@@ -85,7 +87,7 @@ module tb_rgb_conv64;
         repeat (5) @(posedge clk);
 
         // Open output file
-        out_file = $fopen("/home/ihs03/pixel_level_systolic_array/output_112x112x64.txt", "w");
+        out_file = $fopen("/home/mohit/Downloads/testing1.txt", "w");
 
         
         for(i = 0; i < WIDTH*HEIGHT; i=i+1) begin
@@ -99,9 +101,15 @@ module tb_rgb_conv64;
             pixel_valid_r = 1;
             pixel_valid_g = 1;
             pixel_valid_b = 1;
-        
+         for (f = 0; f < NUM_FILTERS; f = f + 1) begin
+                if(conv_valid) begin    
+                //$fwrite(out_file, "%0d ", conv_outs_f[(f+1)*(2*DATA_WIDTH+6)-1 -: (2*DATA_WIDTH+6)]);
+                $fwrite(out_file, "%0d ", conv_outs_f[(f+1)*(2*(2*DATA_WIDTH+6)+6)-1 -: (2*(2*DATA_WIDTH+6)+6)]);
+                end
+            end
+            $fwrite(out_file, "\n");
         end
-
+        
 
         $fclose(out_file);
         $display("Output written to output_112x112x64.txt");

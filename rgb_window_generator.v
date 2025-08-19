@@ -3,7 +3,7 @@
 module rgb_window_generator #(
     
     parameter DATA_WIDTH = 8,
-    parameter IMAGE_SIZE = 5
+    parameter IMAGE_SIZE = 224
     
     )(
     
@@ -23,8 +23,9 @@ module rgb_window_generator #(
     output reg [3*DATA_WIDTH-1:0] output_col_b,
     
     output reg start_conv,
-    output reg done
-    
+    output reg done,
+    output reg col,
+    output reg take_col
     );
     
      //declaring line buffers and shift registers for three channels
@@ -70,8 +71,9 @@ module rgb_window_generator #(
             
             pixel_count  <= 0;
             count        <= 0;
-            
+            col<=0;
             start_conv <= 0;
+            take_col<=0;
         
         end
         
@@ -123,7 +125,7 @@ module rgb_window_generator #(
             pixel_count <= pixel_count+1;
             
             if(pixel_count >= start_window_pixel_count) begin
-        
+                col<=1;
                 output_col_r[2*DATA_WIDTH +: DATA_WIDTH] <= pixel_in_r;
                 output_col_g[2*DATA_WIDTH +: DATA_WIDTH] <= pixel_in_g;
                 output_col_b[2*DATA_WIDTH +: DATA_WIDTH] <= pixel_in_b;
@@ -138,11 +140,17 @@ module rgb_window_generator #(
                     count = count - 1;
                     
                 end
-                
-                if(pixel_count >= start_window_pixel_count+3) begin
+                /*if(pixel_count >= start_window_pixel_count+1) begin
+                start_conv<=1;
+                end*/
+                if(pixel_count >= start_window_pixel_count+4) begin
                 
                     start_conv <= 1;
+                    done<=1;
                 end
+                if(pixel_count >= start_window_pixel_count+7) begin
+                    take_col<=1;
+                    end
         
             end
             
@@ -151,8 +159,10 @@ module rgb_window_generator #(
                 done <= 1;           
                  
             end
+            
                     
         end
+        
         
     end 
         
