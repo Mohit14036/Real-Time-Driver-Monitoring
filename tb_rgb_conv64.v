@@ -1,118 +1,167 @@
 `timescale 1ns / 1ps
 
-module tb_rgb_conv64;
+module tb_conv_layer1;
 
-    parameter DATA_WIDTH = 8;
-    parameter HEIGHT = 224;
-    parameter WIDTH =224;
-    parameter NUM_FILTERS = 3;
+    parameter DATA_WIDTH    = 8;
+    parameter HEIGHT        = 224;
+    parameter WIDTH         = 224;
+
+    parameter OUT_HEIGHT    = 222;
+    parameter OUT_WIDTH     = 222;
+    parameter OUTPUT_SIZE   = OUT_HEIGHT*OUT_WIDTH; // 222*222
+
+    parameter NUM_FILTERS0  = 3;
+    parameter NUM_FILTERS1  = 3;
+
+    parameter RESULT_WIDTH  = 2*DATA_WIDTH+6;
 
     reg clk, rst, load_weight;
-    reg [DATA_WIDTH-1:0] pixel_in_r, pixel_in_g, pixel_in_b;
-    reg pixel_valid_r, pixel_valid_g, pixel_valid_b;
-    //reg [9*DATA_WIDTH-1:0] weights_r, weights_g, weights_b;
-    wire [3*(2*(2*DATA_WIDTH+6)+6)-1:0] conv_outs_f;
-    //wire [3*(2*DATA_WIDTH+6)-1:0] conv_outs_f;
-    wire conv_valid;
+    reg input_valid;
+
+    reg [3*DATA_WIDTH-1:0] input_col_r, input_col_g, input_col_b;
+
+    // Layer-1 BRAM read ports (explicit per filter, no arrays)
+    reg  [17:0] rd_addr0_0, rd_addr0_1, rd_addr0_2;
+    wire [RESULT_WIDTH-1:0] rd_data0_0, rd_data0_1, rd_data0_2;
+
+    // Layer-2 BRAM read ports
+    reg  [17:0] rd_addr1_0, rd_addr1_1, rd_addr1_2;
+    wire [RESULT_WIDTH-1:0] rd_data1_0, rd_data1_1, rd_data1_2;
+
+    wire done0, done_all;
+
     reg [7:0] image_r [0:WIDTH*HEIGHT-1];
     reg [7:0] image_g [0:WIDTH*HEIGHT-1];
     reg [7:0] image_b [0:WIDTH*HEIGHT-1];
 
-    integer out_file, i,f;
+    integer out_file0_0, out_file0_1, out_file0_2;
+    integer out_file1_0, out_file1_1, out_file1_2;
 
-    // Clock generation
+    integer row, col, idx;
+
     always #5 clk = ~clk;
 
-    // Generate 64 identical filters (with weights_r, weights_g, weights_b)
-    //wire [64*9*DATA_WIDTH-1:0] weights_r_all, weights_g_all, weights_b_all;
-
-    //genvar i;
-    /*generate
-        for (i = 0; i < NUM_FILTERS; i = i + 1) begin : weight_copy
-            assign weights_r_all[(i+1)*9*DATA_WIDTH-1 -: 9*DATA_WIDTH] = weights_r;
-            assign weights_g_all[(i+1)*9*DATA_WIDTH-1 -: 9*DATA_WIDTH] = weights_g;
-            assign weights_b_all[(i+1)*9*DATA_WIDTH-1 -: 9*DATA_WIDTH] = weights_b;
-        end
-    endgenerate
-*/
-    // DUT instantiation
-    rgb_conv_layer_64 #(.DATA_WIDTH(DATA_WIDTH)) dut (
+    top #(
+        .DATA_WIDTH(DATA_WIDTH),
+        .OUT_W(OUT_WIDTH),
+        .OUT_H(OUT_HEIGHT),
+        .OUTPUT_SIZE(OUTPUT_SIZE),
+        .NUM_FILTERS0(NUM_FILTERS0),
+        .NUM_FILTERS1(NUM_FILTERS1),
+        .RESULT_WIDTH(RESULT_WIDTH)
+    ) dut (
         .clk(clk),
         .rst(rst),
+        .input_col_r(input_col_r),
+        .input_col_g(input_col_g),
+        .input_col_b(input_col_b),
         .load_weight(load_weight),
-        .pixel_in_r(pixel_in_r),
-        .pixel_in_g(pixel_in_g),
-        .pixel_in_b(pixel_in_b),
-        .pixel_valid_r(pixel_valid_r),
-        .pixel_valid_g(pixel_valid_g),
-        .pixel_valid_b(pixel_valid_b),
-        //.weights_r_all(weights_r_all),
-        //.weights_g_all(weights_g_all),
-        //.weights_b_all(weights_b_all),
-        .conv_outs_2(conv_outs_f),
-        .conv_outs_2_valid(conv_valid)
+        .input_valid(input_valid),
+
+        .rd_addr0_0(rd_addr0_0), .rd_data0_0(rd_data0_0),
+        .rd_addr0_1(rd_addr0_1), .rd_data0_1(rd_data0_1),
+        .rd_addr0_2(rd_addr0_2), .rd_data0_2(rd_data0_2),
+
+        .rd_addr1_0(rd_addr1_0), .rd_data1_0(rd_data1_0),
+        .rd_addr1_1(rd_addr1_1), .rd_data1_1(rd_data1_1),
+        .rd_addr1_2(rd_addr1_2), .rd_data1_2(rd_data1_2),
+
+        .done0(done0),
+        .done_all(done_all)
     );
 
-    // Initial block
     initial begin
-        clk = 0; rst = 1; load_weight = 0;
+        // init
+        clk = 0;
+        rst = 1;
+        load_weight = 0;
+        input_valid = 0;
+        rd_addr0_0 = 0; rd_addr0_1 = 0; rd_addr0_2 = 0;
+        rd_addr1_0 = 0; rd_addr1_1 = 0; rd_addr1_2 = 0;
 
-        // Set all weights to 1
-        /*for (f = 0; f < 9; f = f + 1) begin
-            weights_r[f*DATA_WIDTH +: DATA_WIDTH] = 8'd1;
-            weights_g[f*DATA_WIDTH +: DATA_WIDTH] = 8'd1;
-            weights_b[f*DATA_WIDTH +: DATA_WIDTH] = 8'd1;
-        end*/
-
-        // Wait and release reset
         #20 rst = 0;
-        
-        pixel_valid_r = 0;
-        pixel_valid_g = 0;
-        pixel_valid_b = 0;
-        
-        // Load image from memory files
+
+        // load input planes
         $readmemh("/home/mohit/Downloads/image_r.mem", image_r);
         $readmemh("/home/mohit/Downloads/image_g.mem", image_g);
         $readmemh("/home/mohit/Downloads/image_b.mem", image_b);
-       @(posedge clk);
-        // Load weights
+
+        @(posedge clk);
         load_weight = 1;
         @(posedge clk);
         load_weight = 0;
-        
-        
 
-        // Wait a few cycles to stabilize weights inside systolic array
         repeat (5) @(posedge clk);
 
-        // Open output file
-        out_file = $fopen("/home/mohit/Downloads/testing1.txt", "w");
-
-        
-        for(i = 0; i < WIDTH*HEIGHT; i=i+1) begin
-        
-            @(posedge clk);
-        
-            pixel_in_r = image_r[i];
-            pixel_in_g = image_g[i];
-            pixel_in_b = image_b[i];
-            
-            pixel_valid_r = 1;
-            pixel_valid_g = 1;
-            pixel_valid_b = 1;
-         for (f = 0; f < NUM_FILTERS; f = f + 1) begin
-                if(conv_valid) begin    
-                //$fwrite(out_file, "%0d ", conv_outs_f[(f+1)*(2*DATA_WIDTH+6)-1 -: (2*DATA_WIDTH+6)]);
-                $fwrite(out_file, "%0d ", conv_outs_f[(f+1)*(2*(2*DATA_WIDTH+6)+6)-1 -: (2*(2*DATA_WIDTH+6)+6)]);
-                end
+        // Feed pixels (3-high column per cycle)
+        for (row = 0; row < HEIGHT-2; row = row + 1) begin
+            for (col = 0; col < WIDTH; col = col + 1) begin
+                @(posedge clk);
+                input_valid <= 1'b1;
+                input_col_r <= {image_r[row*WIDTH + col],
+                                image_r[(row+1)*WIDTH + col],
+                                image_r[(row+2)*WIDTH + col]};
+                input_col_g <= {image_g[row*WIDTH + col],
+                                image_g[(row+1)*WIDTH + col],
+                                image_g[(row+2)*WIDTH + col]};
+                input_col_b <= {image_b[row*WIDTH + col],
+                                image_b[(row+1)*WIDTH + col],
+                                image_b[(row+2)*WIDTH + col]};
             end
-            $fwrite(out_file, "\n");
         end
-        
 
-        $fclose(out_file);
-        $display("Output written to output_112x112x64.txt");
+        @(posedge clk);
+        input_valid <= 0;
+
+        // ---- Wait until both layers finish ----
+        wait(done0);
+
+        // ---- Dump Layer-1 outputs ----
+        $display("Dumping Layer-1 outputs...");
+        out_file0_0 = $fopen("/home/mohit/Downloads/layer1_out_f0.txt", "w");
+        out_file0_1 = $fopen("/home/mohit/Downloads/layer1_out_f1.txt", "w");
+        out_file0_2 = $fopen("/home/mohit/Downloads/layer1_out_f2.txt", "w");
+
+        for (idx = 0; idx < OUTPUT_SIZE; idx = idx + 1) begin
+            @(posedge clk);
+            rd_addr0_0 = idx;
+            rd_addr0_1 = idx;
+            rd_addr0_2 = idx;
+            @(posedge clk);
+            $fwrite(out_file0_0, "%0d\n", rd_data0_0);
+            $fwrite(out_file0_1, "%0d\n", rd_data0_1);
+            $fwrite(out_file0_2, "%0d\n", rd_data0_2);
+        end
+
+        $fclose(out_file0_0);
+        $fclose(out_file0_1);
+        $fclose(out_file0_2);
+
+        wait(done_all);
+
+        // ---- Dump Layer-2 outputs ----
+        $display("Dumping Layer-2 outputs...");
+        out_file1_0 = $fopen("/home/mohit/Downloads/layer2_out_f0.txt", "w");
+        out_file1_1 = $fopen("/home/mohit/Downloads/layer2_out_f1.txt", "w");
+        out_file1_2 = $fopen("/home/mohit/Downloads/layer2_out_f2.txt", "w");
+
+        for (idx = 0; idx < OUTPUT_SIZE; idx = idx + 1) begin
+            @(posedge clk);
+            rd_addr1_0 = idx;
+            rd_addr1_1 = idx;
+            rd_addr1_2 = idx;
+            @(posedge clk);
+            $fwrite(out_file1_0, "%0d\n", rd_data1_0);
+            $fwrite(out_file1_1, "%0d\n", rd_data1_1);
+            $fwrite(out_file1_2, "%0d\n", rd_data1_2);
+        end
+
+        $fclose(out_file1_0);
+        $fclose(out_file1_1);
+        $fclose(out_file1_2);
+
+        $display("Both layers written to files.");
+        #50;
         $finish;
     end
 
