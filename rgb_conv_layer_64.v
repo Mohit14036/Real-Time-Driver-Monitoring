@@ -50,14 +50,11 @@ module rgb_conv_layer_64#(
         .conv_out_rgb(conv_out2), .conv_valid(conv_valid2)
     );
 
-    // ---------------------------------
-    // 3 BRAM banks (one per filter)
-    // Drive them with REGISTERED write controls (one-cycle pipeline)
-    // ---------------------------------
-    reg [17:0]              wr_addr_cnt;      // next free address counter
-    reg [17:0]              wr_addr_q;        // address presented to BRAM on this cycle
-    reg [RESULT_WIDTH-1:0]  din0_q, din1_q, din2_q; // data presented to BRAM on this cycle
-    reg                     we_q;             // write enable presented to BRAM on this cycle
+   
+    reg [17:0]              wr_addr_cnt;     
+    reg [17:0]              wr_addr_q;       
+    reg [RESULT_WIDTH-1:0]  din0_q, din1_q, din2_q;
+    reg                     we_q;             
 
     wire fire = conv_valid0 & conv_valid1 & conv_valid2; // all 3 valid same cycle
 
@@ -72,7 +69,6 @@ module rgb_conv_layer_64#(
             we_q        <= 1'b0;
             done        <= 1'b0;
         end else begin
-            // default: no write
             we_q <= 1'b0;
 
             if (fire) begin
@@ -83,11 +79,9 @@ module rgb_conv_layer_64#(
                 wr_addr_q <= wr_addr_cnt;    // write at current counter value
                 we_q      <= 1'b1;           // arm a write for next cycle (BRAM sees previous value)
 
-                // Bump the counter for the following sample
                 wr_addr_cnt <= wr_addr_cnt + 18'd1;
             end
 
-            // Assert done exactly on the cycle the LAST write is happening
             if (we_q && (wr_addr_q == OUTPUT_SIZE-3))
                 done <= 1'b1;
         end
