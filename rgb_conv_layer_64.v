@@ -1,197 +1,112 @@
-`timescale 1ns / 1ps
+`timescale 1ns/1ps
 
-module rgb_conv_layer_64 #(
-    parameter DATA_WIDTH = 8
+module rgb_conv_layer_64#(
+    parameter DATA_WIDTH   = 8,
+    parameter OUTPUT_SIZE  = 222*222,             // one filter output size
+    parameter RESULT_WIDTH = 2*DATA_WIDTH+6
 )(
-    input wire clk,
-    input wire rst,
-    input wire load_weight,
+    input  wire clk,
+    input  wire rst,
+    input  wire [3*DATA_WIDTH-1:0] input_col_r,
+    input  wire [3*DATA_WIDTH-1:0] input_col_g,
+    input  wire [3*DATA_WIDTH-1:0] input_col_b,
+    input  wire load_weight,
+    input  wire input_valid,
+    output reg  done,
 
-    // Shared input pixels for R, G, B
-    input wire [DATA_WIDTH-1:0] pixel_in_r,
-    input wire [DATA_WIDTH-1:0] pixel_in_g,
-    input wire [DATA_WIDTH-1:0] pixel_in_b,
-    
-    input pixel_valid_r,
-    input pixel_valid_g,
-    input pixel_valid_b,
-
-    // Output of 64 parallel convolutions
-    output reg [3*(2*(2*DATA_WIDTH+6)+6)-1:0] conv_outs_2,
-    //output reg [3*(2*DATA_WIDTH+6)-1:0] conv_outs_2,
-    output reg conv_outs_2_valid
+    // BRAM read interface for testbench (separate ports for 3 BRAMs)
+    input  wire [17:0] rd_addr0,
+    output wire [RESULT_WIDTH-1:0] rd_data0,
+    input  wire [17:0] rd_addr1,
+    output wire [RESULT_WIDTH-1:0] rd_data1,
+    input  wire [17:0] rd_addr2,
+    output wire [RESULT_WIDTH-1:0] rd_data2
 );
 
-    // Constant 9x1s vector for weights per channel (72 bits if DATA_WIDTH = 8)
-    localparam [9*DATA_WIDTH-1:0] CONST_ONES = {9{8'd1}};  // 9 weights of value 1
     
-    wire total_window_done;
-    wire start_conv;
-    wire col;
-    wire [3*DATA_WIDTH-1:0] input_col_r;
-    wire [3*DATA_WIDTH-1:0] input_col_g;
-    wire [3*DATA_WIDTH-1:0] input_col_b;
-    
-    reg [3*(2*DATA_WIDTH+6)-1:0] conv_outs;
-    wire take_col;
-    rgb_window_generator #(.DATA_WIDTH(DATA_WIDTH)) window (
-            
-                .clk(clk),
-                .rst(rst),
-                .pixel_in_r(pixel_in_r),
-                .pixel_in_g(pixel_in_g),
-                .pixel_in_b(pixel_in_b),
-                .pixel_valid_r(pixel_valid_r),
-                .pixel_valid_g(pixel_valid_g),
-                .pixel_valid_b(pixel_valid_b),
-                .output_col_r(input_col_r),
-                .output_col_g(input_col_g),
-                .output_col_b(input_col_b),
-                .done(total_window_done),
-                .start_conv(start_conv),
-                .col(col),
-                .take_col(take_col)
-            );
+    localparam [9*DATA_WIDTH-1:0] CONST_ONES = {9{8'd1}};
 
-    genvar i;
-    generate
-        for (i = 0; i < 3; i = i + 1) begin : conv_filters
-            wire [9*DATA_WIDTH-1:0] wr = CONST_ONES;
-            wire [9*DATA_WIDTH-1:0] wg = CONST_ONES;
-            wire [9*DATA_WIDTH-1:0] wb = CONST_ONES;
+    wire [RESULT_WIDTH-1:0] conv_out0, conv_out1, conv_out2;
+    wire                    conv_valid0, conv_valid1, conv_valid2;
 
-            wire signed [2*DATA_WIDTH+5:0] conv_out_i;
-            wire conv_valid_i;
-            rgb_systolic_array_3x3 #(.DATA_WIDTH(DATA_WIDTH)) conv_unit (
-                .clk(clk),
-                .rst(rst),
-                .start_conv(start_conv),
-            
-                .load_weight(load_weight),
-                .input_col_r(input_col_r),
-                .input_col_g(input_col_g),
-                .input_col_b(input_col_b),
-                .weights_r(wr),
-                .weights_g(wg),
-                .weights_b(wb),
-                .conv_out_rgb(conv_out_i),
-                .conv_out_rgb_valid(conv_valid_i),
-                .col(col)
-            );
-            always @(posedge clk or posedge rst) begin
-                if (rst) begin
-                    conv_outs[(i+1)*(2*DATA_WIDTH+6)-1 -: (2*DATA_WIDTH+6)] <= 0;
-                    conv_outs_2_valid <= 0;
-                end else if (conv_valid_i) begin   // only latch when valid
-                    conv_outs[(i+1)*(2*DATA_WIDTH+6)-1 -: (2*DATA_WIDTH+6)] <= conv_out_i;
-                    conv_outs_2_valid <= 1; 
-                end
-                else begin
-                    conv_outs_2_valid <= 0;  //  not valid
-                end
-            end
-            //assign conv_outs_2[(i+1)*(2*DATA_WIDTH+6)-1 -: (2*DATA_WIDTH+6)] = conv_out_i;
-        end
-    endgenerate
-   
-    reg [(2*DATA_WIDTH+6)-1:0] pixel_in_r_2;
-    reg [(2*DATA_WIDTH+6)-1:0] pixel_in_g_2;
-    reg [(2*DATA_WIDTH+6)-1:0] pixel_in_b_2;
-    
-    reg pixel_valid_r_2;
-    reg pixel_valid_g_2;
-    reg pixel_valid_b_2;
-    
-    wire [3*(2*DATA_WIDTH+6)-1:0] input_col_r_2;
-    wire [3*(2*DATA_WIDTH+6)-1:0] input_col_g_2;
-    wire [3*(2*DATA_WIDTH+6)-1:0] input_col_b_2;
-    
-    wire total_window_done_2;
-    wire start_conv_2;
-    
+    rgb_systolic_array_3x3 #(.DATA_WIDTH(DATA_WIDTH)) u_conv0 (
+        .clk(clk), .rst(rst), .load_weight(load_weight), .input_valid(input_valid),
+        .input_col_r(input_col_r), .input_col_g(input_col_g), .input_col_b(input_col_b),
+        .weights_r(CONST_ONES), .weights_g(CONST_ONES), .weights_b(CONST_ONES),
+        .conv_out_rgb(conv_out0), .conv_valid(conv_valid0)
+    );
+
+    rgb_systolic_array_3x3 #(.DATA_WIDTH(DATA_WIDTH)) u_conv1 (
+        .clk(clk), .rst(rst), .load_weight(load_weight), .input_valid(input_valid),
+        .input_col_r(input_col_r), .input_col_g(input_col_g), .input_col_b(input_col_b),
+        .weights_r(CONST_ONES), .weights_g(CONST_ONES), .weights_b(CONST_ONES),
+        .conv_out_rgb(conv_out1), .conv_valid(conv_valid1)
+    );
+
+    rgb_systolic_array_3x3 #(.DATA_WIDTH(DATA_WIDTH)) u_conv2 (
+        .clk(clk), .rst(rst), .load_weight(load_weight), .input_valid(input_valid),
+        .input_col_r(input_col_r), .input_col_g(input_col_g), .input_col_b(input_col_b),
+        .weights_r(CONST_ONES), .weights_g(CONST_ONES), .weights_b(CONST_ONES),
+        .conv_out_rgb(conv_out2), .conv_valid(conv_valid2)
+    );
+
+    // ---------------------------------
+    // 3 BRAM banks (one per filter)
+    // Drive them with REGISTERED write controls (one-cycle pipeline)
+    // ---------------------------------
+    reg [17:0]              wr_addr_cnt;      // next free address counter
+    reg [17:0]              wr_addr_q;        // address presented to BRAM on this cycle
+    reg [RESULT_WIDTH-1:0]  din0_q, din1_q, din2_q; // data presented to BRAM on this cycle
+    reg                     we_q;             // write enable presented to BRAM on this cycle
+
+    wire fire = conv_valid0 & conv_valid1 & conv_valid2; // all 3 valid same cycle
+
+    // capture stage: when fire=1, latch data & address for the *next* cycle write
     always @(posedge clk) begin
         if (rst) begin
-            pixel_in_r_2 <= 0;
-            pixel_in_g_2 <= 0;
-            pixel_in_b_2 <= 0;
-            pixel_valid_r_2 <= 0;
-            pixel_valid_g_2 <= 0;
-            pixel_valid_b_2 <= 0;
-        end else if (conv_outs_2_valid) begin
-            
-            pixel_in_r_2 <= conv_outs[(1)*(2*DATA_WIDTH+6)-1 -: (2*DATA_WIDTH+6)];
-            pixel_in_g_2 <= conv_outs[(2)*(2*DATA_WIDTH+6)-1 -: (2*DATA_WIDTH+6)];
-            pixel_in_b_2 <= conv_outs[(3)*(2*DATA_WIDTH+6)-1 -: (2*DATA_WIDTH+6)];
-    
-            // Set valid flags
-            pixel_valid_r_2 <= 1;
-            pixel_valid_g_2 <= 1;
-            pixel_valid_b_2 <= 1;
+            wr_addr_cnt <= 18'd0;
+            wr_addr_q   <= 18'd0;
+            din0_q      <= {RESULT_WIDTH{1'b0}};
+            din1_q      <= {RESULT_WIDTH{1'b0}};
+            din2_q      <= {RESULT_WIDTH{1'b0}};
+            we_q        <= 1'b0;
+            done        <= 1'b0;
         end else begin
-            pixel_valid_r_2 <= 0;
-            pixel_valid_g_2 <= 0;
-            pixel_valid_b_2 <= 0;
+            // default: no write
+            we_q <= 1'b0;
+
+            if (fire) begin
+                // Latch current outputs and address to be used on the NEXT clock by BRAM
+                din0_q    <= conv_out0;
+                din1_q    <= conv_out1;
+                din2_q    <= conv_out2;
+                wr_addr_q <= wr_addr_cnt;    // write at current counter value
+                we_q      <= 1'b1;           // arm a write for next cycle (BRAM sees previous value)
+
+                // Bump the counter for the following sample
+                wr_addr_cnt <= wr_addr_cnt + 18'd1;
+            end
+
+            // Assert done exactly on the cycle the LAST write is happening
+            if (we_q && (wr_addr_q == OUTPUT_SIZE-3))
+                done <= 1'b1;
         end
     end
 
-    
-    wire col1,conv_valid_i1;
-    
-    rgb_window_generator #(.DATA_WIDTH((2*DATA_WIDTH+6)),.IMAGE_SIZE(222)) window1 (
-            
-                .clk(clk),
-                .rst(rst),
-                .pixel_in_r(pixel_in_r_2),
-                .pixel_in_g(pixel_in_g_2),
-                .pixel_in_b(pixel_in_b_2),
-                .pixel_valid_r(pixel_valid_r_2),
-                .pixel_valid_g(pixel_valid_g_2),
-                .pixel_valid_b(pixel_valid_b_2),
-                .output_col_r(input_col_r_2),
-                .output_col_g(input_col_g_2),
-                .output_col_b(input_col_b_2),
-                .done(total_window_done_2),
-                .start_conv(start_conv_2),
-                .col(col1)
-               
-            );
+    // 3 single-port synchronous BRAMs
+    bram #(.DATA_WIDTH(RESULT_WIDTH), .DEPTH(OUTPUT_SIZE)) bram0 (
+        .clk(clk), .we(we_q), .wr_addr(wr_addr_q), .din(din0_q),
+        .rd_addr(rd_addr0), .dout(rd_data0)
+    );
 
-    genvar j;
-    generate
-        for (j = 0; j < 3; j = j + 1) begin : conv_filters1
-            wire [9*DATA_WIDTH-1:0] wr = CONST_ONES;
-            wire [9*DATA_WIDTH-1:0] wg = CONST_ONES;
-            wire [9*DATA_WIDTH-1:0] wb = CONST_ONES;
+    bram #(.DATA_WIDTH(RESULT_WIDTH), .DEPTH(OUTPUT_SIZE)) bram1 (
+        .clk(clk), .we(we_q), .wr_addr(wr_addr_q), .din(din1_q),
+        .rd_addr(rd_addr1), .dout(rd_data1)
+    );
 
-            wire signed [2*(2*DATA_WIDTH+6)+5:0] conv_out_i_2;
-
-            rgb_systolic_array_3x3 #(.DATA_WIDTH((2*DATA_WIDTH+6)),.OUTPUT_CYCLES(220)) conv_unit1 (
-                .clk(clk),
-                .rst(rst),
-                .start_conv(start_conv_2),
-                .load_weight(load_weight),
-                .input_col_r(input_col_r_2),
-                .input_col_g(input_col_g_2),
-                .input_col_b(input_col_b_2),
-                .weights_r(wr),
-                .weights_g(wg),
-                .weights_b(wb),
-                .conv_out_rgb(conv_out_i_2),
-                .col(col1),
-                .conv_out_rgb_valid(conv_valid_i1)
-
-                
-            );
-            always @(posedge clk) begin
-            if (rst) begin
-                conv_outs_2[(j+1)*(2*(2*DATA_WIDTH+6)+6)-1 -: (2*(2*DATA_WIDTH+6)+6)] <= 0;
-            end else begin
-                conv_outs_2[(j+1)*(2*(2*DATA_WIDTH+6)+6)-1 -: (2*(2*DATA_WIDTH+6)+6)] <= conv_out_i_2;
-            end
-        end
-            //assign conv_outs_2[(j+1)*(2*DATA_WIDTH+6)-1 -: (2*DATA_WIDTH+6)] = conv_out_i_2;
-        end
-    endgenerate
-    
+    bram #(.DATA_WIDTH(RESULT_WIDTH), .DEPTH(OUTPUT_SIZE)) bram2 (
+        .clk(clk), .we(we_q), .wr_addr(wr_addr_q), .din(din2_q),
+        .rd_addr(rd_addr2), .dout(rd_data2)
+    );
 
 endmodule
