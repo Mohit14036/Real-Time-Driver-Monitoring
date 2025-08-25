@@ -113,10 +113,8 @@ module tb_conv_layer1;
         @(posedge clk);
         input_valid <= 0;
 
-        // ---- Wait until both layers finish ----
         wait(done0);
 
-        // ---- Dump Layer-1 outputs ----
         $display("Dumping Layer-1 outputs...");
         out_file0_0 = $fopen("/home/mohit/Downloads/layer1_out_f0.txt", "w");
         out_file0_1 = $fopen("/home/mohit/Downloads/layer1_out_f1.txt", "w");
@@ -139,7 +137,6 @@ module tb_conv_layer1;
 
         wait(done_all);
 
-        // ---- Dump Layer-2 outputs ----
         $display("Dumping Layer-2 outputs...");
         out_file1_0 = $fopen("/home/mohit/Downloads/layer2_out_f0.txt", "w");
         out_file1_1 = $fopen("/home/mohit/Downloads/layer2_out_f1.txt", "w");
