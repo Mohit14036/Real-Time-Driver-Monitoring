@@ -70,7 +70,9 @@ module rgb_conv_layer_64 #(
         .conv_out_rgb(conv_out2), .conv_valid(conv_valid2)
     );
 
-
+    // -------------------------------
+    // Write controller for 3 BRAMs
+    // -------------------------------
     reg [17:0] wr_addr_cnt;
     reg we_d;   // registered write enable
     reg [RESULT_WIDTH-1:0] din0_d, din1_d, din2_d;
@@ -101,12 +103,14 @@ module rgb_conv_layer_64 #(
         end
     end
 
-
+    // -------------------------------
+    // Instantiate BRAMs
+    // -------------------------------
     bram #(.DATA_WIDTH(RESULT_WIDTH), .DEPTH(OUTPUT_SIZE)) bram0 (
         .clk(clk), .we(we_d), .wr_addr(wr_addr_cnt), .din(din0_d),
         .rd_addr0(rd_addr0_0), .dout0(rd_data0_0),
-        .rd_addr1(rd_addr0_1), .dout1(rd_data0_1),  
-        .rd_addr2(rd_addr0_2), .dout2(rd_data0_2)   
+        .rd_addr1(rd_addr0_1), .dout1(rd_data0_1),  // unused
+        .rd_addr2(rd_addr0_2), .dout2(rd_data0_2)   // unused
     );
 
     bram #(.DATA_WIDTH(RESULT_WIDTH), .DEPTH(OUTPUT_SIZE)) bram1 (
