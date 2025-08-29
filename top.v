@@ -4,7 +4,7 @@ module top#(
     parameter DATA_WIDTH    = 8,
     parameter OUT_W         = 222,
     parameter OUT_H         = 222,
-    parameter OUTPUT_SIZE   = OUT_W*OUT_H, 
+    parameter OUTPUT_SIZE   = OUT_W*OUT_H, // 222*222
     parameter NUM_FILTERS0  = 3,
     parameter NUM_FILTERS1  = 3,
     parameter RESULT_WIDTH  = 2*DATA_WIDTH+6
@@ -19,6 +19,7 @@ module top#(
     input  wire                    load_weight,
     input  wire                    input_valid,
 
+    // expose BRAM read ports for BOTH layers (for TB dumping)
     input  wire [17:0] rd_addr0_0, output wire [RESULT_WIDTH-1:0] rd_data0_0,
     input  wire [17:0] rd_addr0_1, output wire [RESULT_WIDTH-1:0] rd_data0_1,
     input  wire [17:0] rd_addr0_2, output wire [RESULT_WIDTH-1:0] rd_data0_2,
@@ -102,18 +103,18 @@ module top#(
         if (rst) begin
             row           <= 0;
             col           <= 0;
-            addr0_0         <= 0;
-            addr0_1         <= OUT_W;
-            addr0_2         <= 2*OUT_W;
+            addr0_0         <= 0+1;
+            addr0_1         <= OUT_W+1;
+            addr0_2         <= 2*OUT_W+1;
             
-            addr1_0         <= 0;
-            addr1_1         <= OUT_W;
-            addr1_2         <= 2*OUT_W;
+            addr1_0         <= 0+1;
+            addr1_1         <= OUT_W+1;
+            addr1_2         <= 2*OUT_W+1;
             
             
-            addr2_0         <= 0;
-            addr2_1         <= OUT_W;
-            addr2_2         <= 2*OUT_W;
+            addr2_0         <= 0+1;
+            addr2_1         <= OUT_W+1;
+            addr2_2         <= 2*OUT_W+1;
             
             stream1_en    <= 0;
             bram_valid_d  <= 0;
@@ -124,26 +125,24 @@ module top#(
                 row          <= 0;
                 col          <= 0;
                 
-                addr0_0         <= 0;
-                addr0_1         <= OUT_W;
-                addr0_2         <= 2*OUT_W;
+                addr0_0         <= 0+1;
+                addr0_1         <= OUT_W+1;
+                addr0_2         <= 2*OUT_W+1;
                 
-                addr1_0         <= 0;
-                addr1_1         <= OUT_W;
-                addr1_2         <= 2*OUT_W;
+                addr1_0         <= 0+1;
+                addr1_1         <= OUT_W+1;
+                addr1_2         <= 2*OUT_W+1;
                 
                 
-                addr2_0         <= 0;
-                addr2_1         <= OUT_W;
-                addr2_2         <= 2*OUT_W;
+                addr2_0         <= 0+1;
+                addr2_1         <= OUT_W+1;
+                addr2_2         <= 2*OUT_W+1;
                 
                 
                 
                 bram_valid_d <= 0;
             end else if (stream1_en) begin
-                if (!bram_valid_d) begin
-                    bram_valid_d <= 1; // wait 1 cycle for BRAM read
-                end else begin
+                
                     // latch BRAM outputs
                     f0[0] <= data0_0; 
                     f0[1] <= data0_1; 
@@ -200,7 +199,7 @@ module top#(
                     end
                     bram_valid_d <= 0;
                 end
-            end else begin
+             else begin
                 l2_input_valid <= 0;
             end
         end
@@ -211,7 +210,7 @@ module top#(
     // ---------------------------
     rgb_conv_layer_64 #(
         .DATA_WIDTH(RESULT_WIDTH),
-        .OUTPUT_SIZE((OUT_W-2)*(OUT_H-2)),  
+        .OUTPUT_SIZE((OUT_W-2)*(OUT_H-2)),   // 220*220
         .RESULT_WIDTH(2*RESULT_WIDTH+6)
     ) layer1 (
         .clk(clk),
