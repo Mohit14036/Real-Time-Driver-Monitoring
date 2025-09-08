@@ -36,9 +36,12 @@ module rgb_window_generator #(
 
     
      //declaring line buffers and shift registers for three channels
-    reg [DATA_WIDTH-1:0] shift_reg_r [1:0][IMAGE_SIZE-1:0];
-    reg [DATA_WIDTH-1:0] shift_reg_g [1:0][IMAGE_SIZE-1:0];
-    reg [DATA_WIDTH-1:0] shift_reg_b [1:0][IMAGE_SIZE-1:0];
+    (* ram_style = "distributed", shreg_extract = "yes" *) reg [IMAGE_SIZE*DATA_WIDTH-1:0] shift_reg_r_0;
+    (* ram_style = "distributed", shreg_extract = "yes" *) reg [IMAGE_SIZE*DATA_WIDTH-1:0] shift_reg_g_0;
+    (* ram_style = "distributed", shreg_extract = "yes" *) reg [IMAGE_SIZE*DATA_WIDTH-1:0] shift_reg_b_0;
+    (* ram_style = "distributed", shreg_extract = "yes" *) reg [IMAGE_SIZE*DATA_WIDTH-1:0] shift_reg_r_1;
+    (* ram_style = "distributed", shreg_extract = "yes" *) reg [IMAGE_SIZE*DATA_WIDTH-1:0] shift_reg_g_1;
+    (* ram_style = "distributed", shreg_extract = "yes" *) reg [IMAGE_SIZE*DATA_WIDTH-1:0] shift_reg_b_1;
     
     reg [DATA_WIDTH-1:0] data_reg_r [1:0][2:0];
     reg [DATA_WIDTH-1:0] data_reg_g [1:0][2:0];
@@ -51,7 +54,7 @@ module rgb_window_generator #(
     integer  pixel_count      = 0;
     integer  count            = 0;
     reg      [8:0] col_cnt;
-    reg             [7:0] row_cnt; 
+    reg      [7:0] row_cnt; 
     
     //loop variables
     integer i, j; 
@@ -83,12 +86,13 @@ module rgb_window_generator #(
     
         if (rst) begin
         
-            for (i = 0; i < 2; i = i+1) begin
-                for (j = 0; j < IMAGE_SIZE; j = j+1) begin
-                   shift_reg_r[i][j] <= 0;
-                   shift_reg_g[i][j] <= 0;
-                   shift_reg_b[i][j] <= 0;
-                end
+            for (i = 0; i < IMAGE_SIZE; i = i+1) begin
+               shift_reg_r_0 <= 0;
+               shift_reg_g_0 <= 0;
+               shift_reg_b_0 <= 0;
+               shift_reg_r_1 <= 0;
+               shift_reg_g_1 <= 0;
+               shift_reg_b_1 <= 0;
             end
            
             
@@ -132,9 +136,9 @@ module rgb_window_generator #(
                     
                     state <= STREAM;
                     col_cnt <= 0;
-                    shift_reg_r[0][0] <= pixel_in_r;
-                    shift_reg_g[0][0] <= pixel_in_g;
-                    shift_reg_b[0][0] <= pixel_in_b; 
+                    shift_reg_r_0[DATA_WIDTH-1 -: DATA_WIDTH] <= pixel_in_r;
+                    shift_reg_g_0[DATA_WIDTH-1 -: DATA_WIDTH] <= pixel_in_g;
+                    shift_reg_b_0[DATA_WIDTH-1 -: DATA_WIDTH] <= pixel_in_b; 
                 
                 end
             
@@ -159,20 +163,21 @@ module rgb_window_generator #(
                 //r channel
                 
                     //Incoming pixel
-                    shift_reg_r[0][0] <= pixel_in_r;
+                    shift_reg_r_0[DATA_WIDTH-1 -: DATA_WIDTH] <= pixel_in_r;
                     
-                    shift_reg_r[1][0] <= shift_reg_r[0][IMAGE_SIZE-1];
+                    shift_reg_r_1[DATA_WIDTH-1 -: DATA_WIDTH] <= shift_reg_r_0[IMAGE_SIZE*DATA_WIDTH-1 -: DATA_WIDTH];
                     
-                    for(i=0; i < 2; i=i+1) begin
-                        for(j=1; j < IMAGE_SIZE; j=j+1) begin
-                            shift_reg_r[i][j] <= shift_reg_r[i][j-1];
-                        end
+                    for(i=1; i < IMAGE_SIZE; i=i+1) begin
+                        
+                        shift_reg_r_0[i*DATA_WIDTH +: DATA_WIDTH] <= shift_reg_r_0[(i-1)*DATA_WIDTH +: DATA_WIDTH];
+                        shift_reg_r_1[i*DATA_WIDTH +: DATA_WIDTH] <= shift_reg_r_1[(i-1)*DATA_WIDTH +: DATA_WIDTH];
+                        
                     end          
                     
                     data_reg_r[1][2] <= pixel_in_r; 
-                    for(i=0; i<2; i=i+1) begin
-                        data_reg_r[1][i] <= shift_reg_r[1-i][IMAGE_SIZE-1];
-                    end      
+                    
+                    data_reg_r[1][0] <= shift_reg_r_1[(IMAGE_SIZE-1)*DATA_WIDTH +: DATA_WIDTH];
+                    data_reg_r[1][1] <= shift_reg_r_0[(IMAGE_SIZE-1)*DATA_WIDTH +: DATA_WIDTH];
                     
                     for(i=0; i<3; i=i+1) begin
                         data_reg_r[0][i]<=data_reg_r[1][i];
@@ -183,21 +188,21 @@ module rgb_window_generator #(
                 //g channel
                 
                     //Incoming pixel
-                    shift_reg_g[0][0] <= pixel_in_g;
+                    shift_reg_g_0[DATA_WIDTH-1 -: DATA_WIDTH] <= pixel_in_g;
                     
-                    for(i=0; i < 2; i=i+1) begin
-                        for(j=1; j < IMAGE_SIZE; j=j+1) begin
-                            shift_reg_g[i][j] <= shift_reg_g[i][j-1];
-                        end
-                    end
+                    shift_reg_g_1[DATA_WIDTH-1 -: DATA_WIDTH] <= shift_reg_g_0[IMAGE_SIZE*DATA_WIDTH-1 -: DATA_WIDTH];
                     
-                    //cascaded shift registers
-                    shift_reg_g[1][0] <= shift_reg_g[0][IMAGE_SIZE-1];
+                    for(i=1; i < IMAGE_SIZE; i=i+1) begin
+                        
+                        shift_reg_g_0[i*DATA_WIDTH +: DATA_WIDTH] <= shift_reg_g_0[(i-1)*DATA_WIDTH +: DATA_WIDTH];
+                        shift_reg_g_1[i*DATA_WIDTH +: DATA_WIDTH] <= shift_reg_g_1[(i-1)*DATA_WIDTH +: DATA_WIDTH];
+                        
+                    end          
                     
                     data_reg_g[1][2] <= pixel_in_g; 
-                    for(i=0; i<2; i=i+1) begin
-                        data_reg_g[1][i] <= shift_reg_g[1-i][IMAGE_SIZE-1];
-                    end      
+                    
+                    data_reg_g[1][0] <= shift_reg_g_1[(IMAGE_SIZE-1)*DATA_WIDTH +: DATA_WIDTH];
+                    data_reg_g[1][1] <= shift_reg_g_0[(IMAGE_SIZE-1)*DATA_WIDTH +: DATA_WIDTH];
                     
                     for(i=0; i<3; i=i+1) begin
                         data_reg_g[0][i]<=data_reg_g[1][i];
@@ -206,24 +211,24 @@ module rgb_window_generator #(
                 //b channel
                 
                     //Incoming pixel
-                    shift_reg_b[0][0] <= pixel_in_b;
+                    shift_reg_b_0[DATA_WIDTH-1 -: DATA_WIDTH] <= pixel_in_b;
                     
-                    for(i=0; i < 2; i=i+1) begin
-                        for(j=1; j < IMAGE_SIZE; j=j+1) begin
-                            shift_reg_b[i][j] <= shift_reg_b[i][j-1];
-                        end
-                    end
+                    shift_reg_b_1[DATA_WIDTH-1 -: DATA_WIDTH] <= shift_reg_b_0[IMAGE_SIZE*DATA_WIDTH-1 -: DATA_WIDTH];
                     
-                    //cascaded shift registers
-                    shift_reg_b[1][0] <= shift_reg_b[0][IMAGE_SIZE-1];
+                    for(i=1; i < IMAGE_SIZE; i=i+1) begin
+                        
+                        shift_reg_b_0[i*DATA_WIDTH +: DATA_WIDTH] <= shift_reg_b_0[(i-1)*DATA_WIDTH +: DATA_WIDTH];
+                        shift_reg_b_1[i*DATA_WIDTH +: DATA_WIDTH] <= shift_reg_b_1[(i-1)*DATA_WIDTH +: DATA_WIDTH];
+                        
+                    end          
                     
                     data_reg_b[1][2] <= pixel_in_b; 
-                    for(i=0; i<2; i=i+1) begin
-                        data_reg_b[1][i] <= shift_reg_b[1-i][IMAGE_SIZE-1];
-                    end      
+                    
+                    data_reg_b[1][0] <= shift_reg_b_1[(IMAGE_SIZE-1)*DATA_WIDTH +: DATA_WIDTH];
+                    data_reg_b[1][1] <= shift_reg_b_0[(IMAGE_SIZE-1)*DATA_WIDTH +: DATA_WIDTH];
                     
                     for(i=0; i<3; i=i+1) begin
-                        data_reg_b[0][i]<=data_reg_b[1][i];
+                        data_reg_r[0][i]<=data_reg_r[1][i];
                     end
                     
                 pixel_count <= pixel_count+1;  
@@ -253,16 +258,17 @@ module rgb_window_generator #(
                     output_win_g[8*DATA_WIDTH +: DATA_WIDTH] <= pixel_in_g;
                     output_win_b[8*DATA_WIDTH +: DATA_WIDTH] <= pixel_in_b;
                     
-                    count = 7;
-                    for(i=0; i<2; i=i+1) begin
+                    output_win_r[7*DATA_WIDTH +: DATA_WIDTH] <= shift_reg_r_0[(IMAGE_SIZE-1)*DATA_WIDTH +: DATA_WIDTH];
+                    output_win_g[7*DATA_WIDTH +: DATA_WIDTH] <= shift_reg_g_0[(IMAGE_SIZE-1)*DATA_WIDTH +: DATA_WIDTH];
+                    output_win_b[7*DATA_WIDTH +: DATA_WIDTH] <= shift_reg_b_0[(IMAGE_SIZE-1)*DATA_WIDTH +: DATA_WIDTH];
                     
-                        output_win_r[count*DATA_WIDTH +: DATA_WIDTH] <= shift_reg_r[i][IMAGE_SIZE-1];
-                        output_win_g[count*DATA_WIDTH +: DATA_WIDTH] <= shift_reg_g[i][IMAGE_SIZE-1];
-                        output_win_b[count*DATA_WIDTH +: DATA_WIDTH] <= shift_reg_b[i][IMAGE_SIZE-1];
-                        
-                        count = count - 1;
-                        
-                    end
+                    
+                    output_win_r[6*DATA_WIDTH +: DATA_WIDTH] <= shift_reg_r_1[(IMAGE_SIZE-1)*DATA_WIDTH +: DATA_WIDTH];
+                    output_win_g[6*DATA_WIDTH +: DATA_WIDTH] <= shift_reg_g_1[(IMAGE_SIZE-1)*DATA_WIDTH +: DATA_WIDTH];
+                    output_win_b[6*DATA_WIDTH +: DATA_WIDTH] <= shift_reg_b_1[(IMAGE_SIZE-1)*DATA_WIDTH +: DATA_WIDTH];
+                    
+                    count = 5;
+                  
                    
                     for(i=0; i<2; i=i+1) begin
                         for(j=0; j<3; j=j+1) begin
@@ -300,23 +306,23 @@ module rgb_window_generator #(
                 
                 end
                 
-                //r channel
+                /* //r channel
                 
                     //Incoming pixel
-                    shift_reg_r[0][0] <= pixel_in_r;
+                    shift_reg_r_0[0] <= pixel_in_r;
                     
-                    shift_reg_r[1][0] <= shift_reg_r[0][IMAGE_SIZE-1];
+                    shift_reg_r_1[0] <= shift_reg_r_0[IMAGE_SIZE-1];
                     
-                    for(i=0; i < 2; i=i+1) begin
-                        for(j=1; j < IMAGE_SIZE; j=j+1) begin
-                            shift_reg_r[i][j] <= shift_reg_r[i][j-1];
-                        end
-                    end          
+                    for(i=1; i < IMAGE_SIZE; i=i+1) begin
+                        
+                        shift_reg_r_0[i] <= shift_reg_r_0[i-1];
+                        shift_reg_r_1[i] <= shift_reg_r_1[i-1];
+                        
+                    end                 
                     
                     data_reg_r[1][2] <= pixel_in_r; 
-                    for(i=0; i<2; i=i+1) begin
-                        data_reg_r[1][i] <= shift_reg_r[1-i][IMAGE_SIZE-1];
-                    end      
+                    data_reg_r[1][0] <= shift_reg_r_1[IMAGE_SIZE-1];
+                    data_reg_r[1][1] <= shift_reg_r_0[IMAGE_SIZE-1];    
                     
                     for(i=0; i<3; i=i+1) begin
                         data_reg_r[0][i]<=data_reg_r[1][i];
@@ -327,21 +333,20 @@ module rgb_window_generator #(
                 //g channel
                 
                     //Incoming pixel
-                    shift_reg_g[0][0] <= pixel_in_g;
+                    shift_reg_g_0[0] <= pixel_in_g;
                     
-                    for(i=0; i < 2; i=i+1) begin
-                        for(j=1; j < IMAGE_SIZE; j=j+1) begin
-                            shift_reg_g[i][j] <= shift_reg_g[i][j-1];
-                        end
-                    end
+                    shift_reg_g_1[0] <= shift_reg_g_0[IMAGE_SIZE-1];
                     
-                    //cascaded shift registers
-                    shift_reg_g[1][0] <= shift_reg_g[0][IMAGE_SIZE-1];
+                    for(i=1; i < IMAGE_SIZE; i=i+1) begin
+                        
+                        shift_reg_g_0[i] <= shift_reg_g_0[i-1];
+                        shift_reg_g_1[i] <= shift_reg_g_1[i-1];
+                        
+                    end 
                     
                     data_reg_g[1][2] <= pixel_in_g; 
-                    for(i=0; i<2; i=i+1) begin
-                        data_reg_g[1][i] <= shift_reg_g[1-i][IMAGE_SIZE-1];
-                    end      
+                    data_reg_g[1][0] <= shift_reg_g_1[IMAGE_SIZE-1];
+                    data_reg_g[1][1] <= shift_reg_g_0[IMAGE_SIZE-1];     
                     
                     for(i=0; i<3; i=i+1) begin
                         data_reg_g[0][i]<=data_reg_g[1][i];
@@ -350,26 +355,95 @@ module rgb_window_generator #(
                 //b channel
                 
                     //Incoming pixel
-                    shift_reg_b[0][0] <= pixel_in_b;
+                     shift_reg_b_0[0] <= pixel_in_b;
                     
-                    for(i=0; i < 2; i=i+1) begin
-                        for(j=1; j < IMAGE_SIZE; j=j+1) begin
-                            shift_reg_b[i][j] <= shift_reg_b[i][j-1];
-                        end
-                    end
+                    shift_reg_b_1[0] <= shift_reg_b_0[IMAGE_SIZE-1];
                     
-                    //cascaded shift registers
-                    shift_reg_b[1][0] <= shift_reg_b[0][IMAGE_SIZE-1];
+                    for(i=1; i < IMAGE_SIZE; i=i+1) begin
+                        
+                        shift_reg_b_0[i] <= shift_reg_b_0[i-1];
+                        shift_reg_b_1[i] <= shift_reg_b_1[i-1];
+                        
+                    end 
                     
                     data_reg_b[1][2] <= pixel_in_b; 
-                    for(i=0; i<2; i=i+1) begin
-                        data_reg_b[1][i] <= shift_reg_b[1-i][IMAGE_SIZE-1];
-                    end      
+                    data_reg_b[1][0] <= shift_reg_b_1[IMAGE_SIZE-1];
+                    data_reg_b[1][1] <= shift_reg_b_0[IMAGE_SIZE-1];      
                     
                     for(i=0; i<3; i=i+1) begin
                         data_reg_b[0][i]<=data_reg_b[1][i];
+                    end */
+                    
+                
+                //Incoming pixel
+                    shift_reg_r_0[DATA_WIDTH-1 -: DATA_WIDTH] <= pixel_in_r;
+                    
+                    shift_reg_r_1[DATA_WIDTH-1 -: DATA_WIDTH] <= shift_reg_r_0[IMAGE_SIZE*DATA_WIDTH-1 -: DATA_WIDTH];
+                    
+                    for(i=1; i < IMAGE_SIZE; i=i+1) begin
+                        
+                        shift_reg_r_0[i*DATA_WIDTH +: DATA_WIDTH] <= shift_reg_r_0[(i-1)*DATA_WIDTH +: DATA_WIDTH];
+                        shift_reg_r_1[i*DATA_WIDTH +: DATA_WIDTH] <= shift_reg_r_1[(i-1)*DATA_WIDTH +: DATA_WIDTH];
+                        
+                    end          
+                    
+                    data_reg_r[1][2] <= pixel_in_r; 
+                    
+                    data_reg_r[1][0] <= shift_reg_r_1[(IMAGE_SIZE-1)*DATA_WIDTH +: DATA_WIDTH];
+                    data_reg_r[1][1] <= shift_reg_r_0[(IMAGE_SIZE-1)*DATA_WIDTH +: DATA_WIDTH];
+                    
+                    for(i=0; i<3; i=i+1) begin
+                        data_reg_r[0][i]<=data_reg_r[1][i];
                     end
                     
+                            
+                    
+                //g channel
+                
+                    //Incoming pixel
+                    shift_reg_g_0[DATA_WIDTH-1 -: DATA_WIDTH] <= pixel_in_g;
+                    
+                    shift_reg_g_1[DATA_WIDTH-1 -: DATA_WIDTH] <= shift_reg_g_0[IMAGE_SIZE*DATA_WIDTH-1 -: DATA_WIDTH];
+                    
+                    for(i=1; i < IMAGE_SIZE; i=i+1) begin
+                        
+                        shift_reg_g_0[i*DATA_WIDTH +: DATA_WIDTH] <= shift_reg_g_0[(i-1)*DATA_WIDTH +: DATA_WIDTH];
+                        shift_reg_g_1[i*DATA_WIDTH +: DATA_WIDTH] <= shift_reg_g_1[(i-1)*DATA_WIDTH +: DATA_WIDTH];
+                        
+                    end          
+                    
+                    data_reg_g[1][2] <= pixel_in_g; 
+                    
+                    data_reg_g[1][0] <= shift_reg_g_1[(IMAGE_SIZE-1)*DATA_WIDTH +: DATA_WIDTH];
+                    data_reg_g[1][1] <= shift_reg_g_0[(IMAGE_SIZE-1)*DATA_WIDTH +: DATA_WIDTH];
+                    
+                    for(i=0; i<3; i=i+1) begin
+                        data_reg_g[0][i]<=data_reg_g[1][i];
+                    end
+                    
+                //b channel
+                
+                    //Incoming pixel
+                    shift_reg_b_0[DATA_WIDTH-1 -: DATA_WIDTH] <= pixel_in_b;
+                    
+                    shift_reg_b_1[DATA_WIDTH-1 -: DATA_WIDTH] <= shift_reg_b_0[IMAGE_SIZE*DATA_WIDTH-1 -: DATA_WIDTH];
+                    
+                    for(i=1; i < IMAGE_SIZE; i=i+1) begin
+                        
+                        shift_reg_b_0[i*DATA_WIDTH +: DATA_WIDTH] <= shift_reg_b_0[(i-1)*DATA_WIDTH +: DATA_WIDTH];
+                        shift_reg_b_1[i*DATA_WIDTH +: DATA_WIDTH] <= shift_reg_b_1[(i-1)*DATA_WIDTH +: DATA_WIDTH];
+                        
+                    end          
+                    
+                    data_reg_b[1][2] <= pixel_in_b; 
+                    
+                    data_reg_b[1][0] <= shift_reg_b_1[(IMAGE_SIZE-1)*DATA_WIDTH +: DATA_WIDTH];
+                    data_reg_b[1][1] <= shift_reg_b_0[(IMAGE_SIZE-1)*DATA_WIDTH +: DATA_WIDTH];
+                    
+                    for(i=0; i<3; i=i+1) begin
+                        data_reg_r[0][i]<=data_reg_r[1][i];
+                    end
+                                     
                 pixel_count <= pixel_count+1;    
                 
                 if (col_cnt >= 1) begin 
@@ -388,16 +462,17 @@ module rgb_window_generator #(
                     output_win_g[8*DATA_WIDTH +: DATA_WIDTH] <= pixel_in_g;
                     output_win_b[8*DATA_WIDTH +: DATA_WIDTH] <= pixel_in_b;
                     
-                    count = 7;
-                    for(i=0; i<2; i=i+1) begin
+                    output_win_r[7*DATA_WIDTH +: DATA_WIDTH] <= shift_reg_r_0[(IMAGE_SIZE-1)*DATA_WIDTH +: DATA_WIDTH];
+                    output_win_g[7*DATA_WIDTH +: DATA_WIDTH] <= shift_reg_g_0[(IMAGE_SIZE-1)*DATA_WIDTH +: DATA_WIDTH];
+                    output_win_b[7*DATA_WIDTH +: DATA_WIDTH] <= shift_reg_b_0[(IMAGE_SIZE-1)*DATA_WIDTH +: DATA_WIDTH];
                     
-                        output_win_r[count*DATA_WIDTH +: DATA_WIDTH] <= shift_reg_r[i][IMAGE_SIZE-1];
-                        output_win_g[count*DATA_WIDTH +: DATA_WIDTH] <= shift_reg_g[i][IMAGE_SIZE-1];
-                        output_win_b[count*DATA_WIDTH +: DATA_WIDTH] <= shift_reg_b[i][IMAGE_SIZE-1];
-                        
-                        count = count - 1;
-                        
-                    end
+                    
+                    output_win_r[6*DATA_WIDTH +: DATA_WIDTH] <= shift_reg_r_1[(IMAGE_SIZE-1)*DATA_WIDTH +: DATA_WIDTH];
+                    output_win_g[6*DATA_WIDTH +: DATA_WIDTH] <= shift_reg_g_1[(IMAGE_SIZE-1)*DATA_WIDTH +: DATA_WIDTH];
+                    output_win_b[6*DATA_WIDTH +: DATA_WIDTH] <= shift_reg_b_1[(IMAGE_SIZE-1)*DATA_WIDTH +: DATA_WIDTH];
+                    
+                    count = 5;
+                  
                    
                     for(i=0; i<2; i=i+1) begin
                         for(j=0; j<3; j=j+1) begin
