@@ -19,10 +19,10 @@ module FIFO #(
 
     );
         
-    reg [DATA_WIDTH-1:0] fifo [0:FIFO_DEPTH-1];
+    (* ram_style = "block" *)  reg [DATA_WIDTH-1:0] fifo [0:FIFO_DEPTH-1];
     reg [ADDR_WIDTH-1:0] wr_ptr, rd_ptr;
     reg read_en;
-    reg [(FIFO_DEPTH*FIFO_DEPTH)/4 -1 : 0] count;
+    reg [$clog2((FIFO_DEPTH*FIFO_DEPTH)/4 + 1) -1 : 0] count;
     
     
     always @(posedge clk) begin
