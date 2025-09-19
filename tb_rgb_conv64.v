@@ -108,7 +108,14 @@ module tb_rgb_conv64;
 
         // Open output file
         out_file = $fopen("/home/ihs03/pixel_level_systolic_array/output_112x112x64.txt", "w");
-
+        @(posedge clk);
+//        pixel_in_r = 8'b0;
+//        pixel_in_g = 8'b0;
+//        pixel_in_b = 8'b0;
+        pixel_valid_r = 1;
+        pixel_valid_g = 1;
+        pixel_valid_b = 1;
+        
         
         for(i = 0; i < WIDTH*HEIGHT; i=i+1) begin
         
