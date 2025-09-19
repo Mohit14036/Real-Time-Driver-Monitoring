@@ -33,7 +33,7 @@ module top #(
     wire [9*DATA_WIDTH-1:0] input_win_b;
     
     
-    wire start_fifo;
+    wire start_fifo[2:0];
     reg fifo_valid;
  
     rgb_window_generator #(.DATA_WIDTH(DATA_WIDTH),.IMAGE_SIZE(224)) window (
@@ -75,13 +75,13 @@ module top #(
                 .weights_g(wg),
                 .weights_b(wb),
                 .conv_outs_rgb(conv_outs_rgb[(i+1)*(2*DATA_WIDTH+6)-1 -: (2*DATA_WIDTH+6)]),
-                .start_fifo(start_fifo)
+                .start_fifo(start_fifo[i])
                 
             );
             
             always @(posedge clk) begin 
             
-                fifo_valid <= start_fifo;
+                fifo_valid <= start_fifo[i];
             
             end
             //assign conv_outs_2[(i+1)*(2*DATA_WIDTH+6)-1 -: (2*DATA_WIDTH+6)] = conv_out_i;
@@ -173,7 +173,7 @@ module top #(
         end
     end*/
 
-    wire start_fifo_2;
+    wire start_fifo_2[2:0];
     reg fifo_valid_2;
     
     rgb_window_generator #(.DATA_WIDTH((2*DATA_WIDTH+6)),.IMAGE_SIZE(222)) window1 (
@@ -215,14 +215,14 @@ module top #(
                 .weights_g(wg),
                 .weights_b(wb),
                 .conv_outs_rgb(conv_outs_rgb_2[(j+1)*(2*(2*DATA_WIDTH+6)+6)-1 -: (2*(2*DATA_WIDTH+6)+6)]),
-                .start_fifo(start_fifo_2)
+                .start_fifo(start_fifo_2[j])
 
                 
             );
             
             always @(posedge clk) begin 
             
-                fifo_valid_2 <= start_fifo_2;
+                fifo_valid_2 <= start_fifo_2[j];
             
             end
             //assign conv_outs_2[(j+1)*(2*DATA_WIDTH+6)-1 -: (2*DATA_WIDTH+6)] = conv_out_i_2;
