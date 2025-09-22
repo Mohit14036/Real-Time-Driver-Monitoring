@@ -1,24 +1,45 @@
 `timescale 1ns / 1ps
+//////////////////////////////////////////////////////////////////////////////////
+// Company: 
+// Engineer: 
+// 
+// Create Date: 09/02/2025 03:19:56 PM
+// Design Name: 
+// Module Name: tb
+// Project Name: 
+// Target Devices: 
+// Tool Versions: 
+// Description: 
+// 
+// Dependencies: 
+// 
+// Revision:
+// Revision 0.01 - File Created
+// Additional Comments:
+// 
+//////////////////////////////////////////////////////////////////////////////////
+
+
+`timescale 1ns / 1ps
 
 module tb_rgb_conv64;
 
     parameter DATA_WIDTH = 8;
     parameter HEIGHT = 224;
-    parameter WIDTH =224;
+    parameter WIDTH = 224;
     parameter NUM_FILTERS = 3;
 
     reg clk, rst, load_weight;
     reg [DATA_WIDTH-1:0] pixel_in_r, pixel_in_g, pixel_in_b;
     reg pixel_valid_r, pixel_valid_g, pixel_valid_b;
     //reg [9*DATA_WIDTH-1:0] weights_r, weights_g, weights_b;
-    wire [3*(2*(2*DATA_WIDTH+6)+6)-1:0] conv_outs_f;
-    //wire [3*(2*DATA_WIDTH+6)-1:0] conv_outs_f;
-    wire conv_valid;
-    reg [7:0] image_r [0:WIDTH*HEIGHT-1];
-    reg [7:0] image_g [0:WIDTH*HEIGHT-1];
-    reg [7:0] image_b [0:WIDTH*HEIGHT-1];
+    wire [(NUM_FILTERS*(2*(2*DATA_WIDTH+6)+6))-1:0] conv_outs_rgb_2;
 
-    integer out_file, i,f;
+    reg [7:0] image_r [0:HEIGHT*WIDTH];
+    reg [7:0] image_g [0:HEIGHT*WIDTH];
+    reg [7:0] image_b [0:HEIGHT*WIDTH];
+
+    integer out_file, i;
 
     // Clock generation
     always #5 clk = ~clk;
@@ -49,8 +70,7 @@ module tb_rgb_conv64;
         //.weights_r_all(weights_r_all),
         //.weights_g_all(weights_g_all),
         //.weights_b_all(weights_b_all),
-        .conv_outs_2(conv_outs_f),
-        .conv_outs_2_valid(conv_valid)
+        .conv_outs_rgb_2(conv_outs_rgb_2)
     );
 
     // Initial block
@@ -87,7 +107,7 @@ module tb_rgb_conv64;
         repeat (5) @(posedge clk);
 
         // Open output file
-        out_file = $fopen("/home/mohit/Downloads/testing1.txt", "w");
+        out_file = $fopen("/home/mohit/Downloads/output_112x112x64.txt", "w");
 
         
         for(i = 0; i < WIDTH*HEIGHT; i=i+1) begin
@@ -101,19 +121,18 @@ module tb_rgb_conv64;
             pixel_valid_r = 1;
             pixel_valid_g = 1;
             pixel_valid_b = 1;
-         for (f = 0; f < NUM_FILTERS; f = f + 1) begin
-                if(conv_valid) begin    
-                //$fwrite(out_file, "%0d ", conv_outs_f[(f+1)*(2*DATA_WIDTH+6)-1 -: (2*DATA_WIDTH+6)]);
-                $fwrite(out_file, "%0d ", conv_outs_f[(f+1)*(2*(2*DATA_WIDTH+6)+6)-1 -: (2*(2*DATA_WIDTH+6)+6)]);
-                end
-            end
-            $fwrite(out_file, "\n");
-        end
         
-
+        end
+        @(posedge clk);
+        pixel_valid_r = 0;
+        pixel_valid_g = 0;
+        pixel_valid_b = 0;
+        
         $fclose(out_file);
         $display("Output written to output_112x112x64.txt");
-        $finish;
+        
     end
-
+    
+    always @(posedge clk) begin //$fwrite(out_file, "%d\n", conv_outs_rgb_2); end
+   end
 endmodule
