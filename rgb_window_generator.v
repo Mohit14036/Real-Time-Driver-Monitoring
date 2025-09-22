@@ -18,30 +18,66 @@ module rgb_window_generator #(
     input pixel_valid_g,
     input pixel_valid_b,
     
-    output reg [3*DATA_WIDTH-1:0] output_col_r,
-    output reg [3*DATA_WIDTH-1:0] output_col_g,
-    output reg [3*DATA_WIDTH-1:0] output_col_b,
+    output reg [3*DATA_WIDTH-1:0] output_win_r,
+    output reg [3*DATA_WIDTH-1:0] output_win_g,
+    output reg [3*DATA_WIDTH-1:0] output_win_b,
     
     output reg start_conv,
-    output reg done,
-    output reg col,
-    output reg take_col
+    output reg done
+    
     );
+    
+    localparam IDLE        = 2'b00;
+    localparam STREAM      = 2'b01;
+    //localparam PAUSE       = 2'b10;
+    localparam DONE        = 2'b11;
+ 
+    reg [1:0] state, next_state;
+    reg flag;
     
      //declaring line buffers and shift registers for three channels
     reg [DATA_WIDTH-1:0] shift_reg_r [1:0][IMAGE_SIZE-1:0];
     reg [DATA_WIDTH-1:0] shift_reg_g [1:0][IMAGE_SIZE-1:0];
     reg [DATA_WIDTH-1:0] shift_reg_b [1:0][IMAGE_SIZE-1:0];
     
+    reg [DATA_WIDTH-1:0] data_reg_r [1:0][2:0];
+    reg [DATA_WIDTH-1:0] data_reg_g [1:0][2:0];
+    reg [DATA_WIDTH-1:0] data_reg_b [1:0][2:0];
+    
     //minimum number of pixels that should arrive to start window generation for a kernel size of 3 for a prepadded image
-    integer start_window_pixel_count  = (2*IMAGE_SIZE); 
+    integer start_window_pixel_count  = (2*IMAGE_SIZE)-1; 
     
     //counters
-    integer  pixel_count = 0;
-    integer        count = 0;
+    integer  pixel_count      = 0;
+    integer  count            = 0;
+    reg      [8:0] col_cnt;
+    reg             [7:0] row_cnt; 
     
     //loop variables
     integer i, j; 
+    
+
+/*    always @(*) begin
+        next_state = state;
+        case (state)
+            IDLE: begin
+                if (pixel_valid_r && pixel_valid_g && pixel_valid_b)
+                    next_state = STREAM;
+            end
+
+            STREAM: begin
+                if (col_cnt == IMAGE_SIZE && row_cnt == IMAGE_SIZE) begin
+                    next_state = DONE;
+                end
+            end
+
+            DONE: begin
+                next_state = IDLE;
+            end
+            
+            default: next_state = IDLE;
+        endcase
+    end */
     
     always @(posedge clk) begin
     
@@ -50,120 +86,327 @@ module rgb_window_generator #(
             for (i = 0; i < 2; i = i+1) begin
                 for (j = 0; j < IMAGE_SIZE; j = j+1) begin
                    shift_reg_r[i][j] <= 0;
-                end
-            end
-            for (i = 0; i < 2; i = i+1) begin
-                for (j = 0; j < IMAGE_SIZE; j = j+1) begin
                    shift_reg_g[i][j] <= 0;
-                end
-            end
-            for (i = 0; i < 2; i = i+1) begin
-                for (j = 0; j < IMAGE_SIZE; j = j+1) begin
                    shift_reg_b[i][j] <= 0;
                 end
             end
+           
             
-            output_col_r <= 'b0 ;
-            output_col_g <= 'b0 ;
-            output_col_b <= 'b0 ;
+            for (i = 0; i < 2; i = i+1) begin
+                for (j = 0; j < 3; j = j+1) begin
+                   data_reg_r[i][j] <= 0;
+                   data_reg_g[i][j] <= 0;
+                   data_reg_b[i][j] <= 0;
+                end
+            end
+                        
+            output_win_r <= 'b0 ;
+            output_win_g <= 'b0 ;
+            output_win_b <= 'b0 ;
             
             done         <= 0;
-            
             pixel_count  <= 0;
             count        <= 0;
-            col<=0;
-            start_conv <= 0;
-            take_col<=0;
+            start_conv   <= 0;
+            col_cnt      <= 0;
+            row_cnt      <= 0;
+            state        <= IDLE;
+            flag<=0;
+            
         
         end
         
-        else if(pixel_valid_r && pixel_valid_g && pixel_valid_b) begin
-            
-            //r channel
-            
-                //Incoming pixel
-                shift_reg_r[0][0] <= pixel_in_r;
-                
-                shift_reg_r[1][0] <= shift_reg_r[0][IMAGE_SIZE-1];
-                
-                for(i=0; i < 2; i=i+1) begin
-                    for(j=1; j < IMAGE_SIZE; j=j+1) begin
-                        shift_reg_r[i][j] <= shift_reg_r[i][j-1];
-                    end
-                end                
-                
-                        
-                
-            //g channel
-            
-                //Incoming pixel
-                shift_reg_g[0][0] <= pixel_in_g;
-                
-                for(i=0; i < 2; i=i+1) begin
-                    for(j=1; j < IMAGE_SIZE; j=j+1) begin
-                        shift_reg_g[i][j] <= shift_reg_g[i][j-1];
-                    end
-                end
-                
-                //cascaded shift registers
-                shift_reg_g[1][0] <= shift_reg_g[0][IMAGE_SIZE-1];
-                
-            //b channel
-            
-                //Incoming pixel
-                shift_reg_b[0][0] <= pixel_in_b;
-                
-                for(i=0; i < 2; i=i+1) begin
-                    for(j=1; j < IMAGE_SIZE; j=j+1) begin
-                        shift_reg_b[i][j] <= shift_reg_b[i][j-1];
-                    end
-                end
-                
-                //cascaded shift registers
-                shift_reg_b[1][0] <= shift_reg_b[0][IMAGE_SIZE-1];
-                
-            pixel_count <= pixel_count+1;
-            
-            if(pixel_count >= start_window_pixel_count) begin
-                col<=1;
-                output_col_r[2*DATA_WIDTH +: DATA_WIDTH] <= pixel_in_r;
-                output_col_g[2*DATA_WIDTH +: DATA_WIDTH] <= pixel_in_g;
-                output_col_b[2*DATA_WIDTH +: DATA_WIDTH] <= pixel_in_b;
-                
-                count = 1;
-                for(i=0; i<2; i=i+1) begin
-                
-                    output_col_r[count*DATA_WIDTH +: DATA_WIDTH] <= shift_reg_r[i][IMAGE_SIZE-1];
-                    output_col_g[count*DATA_WIDTH +: DATA_WIDTH] <= shift_reg_g[i][IMAGE_SIZE-1];
-                    output_col_b[count*DATA_WIDTH +: DATA_WIDTH] <= shift_reg_b[i][IMAGE_SIZE-1];
-                    
-                    count = count - 1;
-                    
-                end
-                /*if(pixel_count >= start_window_pixel_count+1) begin
-                start_conv<=1;
-                end*/
-                if(pixel_count >= start_window_pixel_count+4) begin
-                
-                    start_conv <= 1;
-                    done<=1;
-                end
-                if(pixel_count >= start_window_pixel_count+7) begin
-                    take_col<=1;
-                    end
+        else begin
         
+            case(state)
+            
+            IDLE: begin
+
+                done        <= 0;
+                start_conv  <= 0;
+                col_cnt     <= 0;
+                row_cnt     <= 0;
+                pixel_count <= 0;
+                
+                if(pixel_valid_r && pixel_valid_g && pixel_valid_b) begin
+                   
+                    
+                    state <= STREAM;
+                    col_cnt <= 0;
+                    shift_reg_r[0][0] <= pixel_in_r;
+                    shift_reg_g[0][0] <= pixel_in_g;
+                    shift_reg_b[0][0] <= pixel_in_b; 
+                
+                end
+            
             end
             
-            if(pixel_count == IMAGE_SIZE*IMAGE_SIZE) begin
+            STREAM: begin
+                
+                start_conv <= 0;
             
-                done <= 1;           
+                if (col_cnt == IMAGE_SIZE-1 && row_cnt== IMAGE_SIZE-1) begin
+                    start_conv<=1;
+                    state <= DONE; 
+                    
+                end //else if (col_cnt < 2 || col_cnt == IMAGE_SIZE-1) begin
+                
+//                    state <= PAUSE;
+                
+//                end
+            
+                
+                         
+                //r channel
+                
+                    //Incoming pixel
+                    shift_reg_r[0][0] <= pixel_in_r;
+                    
+                    shift_reg_r[1][0] <= shift_reg_r[0][IMAGE_SIZE-1];
+                    
+                    for(i=0; i < 2; i=i+1) begin
+                        for(j=1; j < IMAGE_SIZE; j=j+1) begin
+                            shift_reg_r[i][j] <= shift_reg_r[i][j-1];
+                        end
+                    end          
+                    
+                    data_reg_r[1][2] <= pixel_in_r; 
+                    for(i=0; i<2; i=i+1) begin
+                        data_reg_r[1][i] <= shift_reg_r[1-i][IMAGE_SIZE-1];
+                    end      
+                    
+                    for(i=0; i<3; i=i+1) begin
+                        data_reg_r[0][i]<=data_reg_r[1][i];
+                    end
+                    
+                            
+                    
+                //g channel
+                
+                    //Incoming pixel
+                    shift_reg_g[0][0] <= pixel_in_g;
+                    
+                    for(i=0; i < 2; i=i+1) begin
+                        for(j=1; j < IMAGE_SIZE; j=j+1) begin
+                            shift_reg_g[i][j] <= shift_reg_g[i][j-1];
+                        end
+                    end
+                    
+                    //cascaded shift registers
+                    shift_reg_g[1][0] <= shift_reg_g[0][IMAGE_SIZE-1];
+                    
+                    data_reg_g[1][2] <= pixel_in_g; 
+                    for(i=0; i<2; i=i+1) begin
+                        data_reg_g[1][i] <= shift_reg_g[1-i][IMAGE_SIZE-1];
+                    end      
+                    
+                    for(i=0; i<3; i=i+1) begin
+                        data_reg_g[0][i]<=data_reg_g[1][i];
+                    end
+                    
+                //b channel
+                
+                    //Incoming pixel
+                    shift_reg_b[0][0] <= pixel_in_b;
+                    
+                    for(i=0; i < 2; i=i+1) begin
+                        for(j=1; j < IMAGE_SIZE; j=j+1) begin
+                            shift_reg_b[i][j] <= shift_reg_b[i][j-1];
+                        end
+                    end
+                    
+                    //cascaded shift registers
+                    shift_reg_b[1][0] <= shift_reg_b[0][IMAGE_SIZE-1];
+                    
+                    data_reg_b[1][2] <= pixel_in_b; 
+                    for(i=0; i<2; i=i+1) begin
+                        data_reg_b[1][i] <= shift_reg_b[1-i][IMAGE_SIZE-1];
+                    end      
+                    
+                    for(i=0; i<3; i=i+1) begin
+                        data_reg_b[0][i]<=data_reg_b[1][i];
+                    end
+                    
+                pixel_count <= pixel_count+1;  
+                
+                if (col_cnt == IMAGE_SIZE-1) begin
+                    col_cnt <= 0;
+                    if (row_cnt < IMAGE_SIZE-1) begin
+                        row_cnt <= row_cnt + 1;
+                    end 
+                end else begin
+                    col_cnt <= col_cnt + 1;
+                end
+                
+                if(pixel_count >= start_window_pixel_count /*&& (col_cnt>=0 && col_cnt<=IMAGE_SIZE-2)*/) begin
+                    if(pixel_count>=start_window_pixel_count+3)begin
+                        start_conv<=1;
+                        end
+                
+                    output_win_r[2*DATA_WIDTH +: DATA_WIDTH] <= pixel_in_r;
+                    output_win_g[2*DATA_WIDTH +: DATA_WIDTH] <= pixel_in_g;
+                    output_win_b[2*DATA_WIDTH +: DATA_WIDTH] <= pixel_in_b;
+                    
+                    count = 1;
+                    for(i=0; i<2; i=i+1) begin
+                    
+                        output_win_r[count*DATA_WIDTH +: DATA_WIDTH] <= shift_reg_r[i][IMAGE_SIZE-1];
+                        output_win_g[count*DATA_WIDTH +: DATA_WIDTH] <= shift_reg_g[i][IMAGE_SIZE-1];
+                        output_win_b[count*DATA_WIDTH +: DATA_WIDTH] <= shift_reg_b[i][IMAGE_SIZE-1];
+                        
+                        count = count - 1;
+                        
+                    end
+                   
+                    
+                
+                
+                end
                  
             end
             
+//            PAUSE: begin 
+
+//                if (col_cnt == IMAGE_SIZE-1) begin
+//                    col_cnt <= 0;
+//                    if (row_cnt < IMAGE_SIZE-1) begin
+//                        row_cnt <= row_cnt + 1;
+//                    end
+//                end else begin
+//                    col_cnt <= col_cnt + 1;
+//                end
+                
+//                if (col_cnt>=1 && pixel_count >= start_window_pixel_count) begin 
+                
+//                    start_conv <= 1;
+                
+//                end else if ((col_cnt == IMAGE_SIZE-1 || col_cnt < 1) || pixel_count < start_window_pixel_count) begin
+                
+//                    start_conv <= 0;
+                
+//                end
+                
+//                //r channel
+                
+//                    //Incoming pixel
+//                    shift_reg_r[0][0] <= pixel_in_r;
+                    
+//                    shift_reg_r[1][0] <= shift_reg_r[0][IMAGE_SIZE-1];
+                    
+//                    for(i=0; i < 2; i=i+1) begin
+//                        for(j=1; j < IMAGE_SIZE; j=j+1) begin
+//                            shift_reg_r[i][j] <= shift_reg_r[i][j-1];
+//                        end
+//                    end          
+                    
+//                    data_reg_r[1][2] <= pixel_in_r; 
+//                    for(i=0; i<2; i=i+1) begin
+//                        data_reg_r[1][i] <= shift_reg_r[1-i][IMAGE_SIZE-1];
+//                    end      
+                    
+//                    for(i=0; i<3; i=i+1) begin
+//                        data_reg_r[0][i]<=data_reg_r[1][i];
+//                    end
+                    
+                            
+                    
+//                //g channel
+                
+//                    //Incoming pixel
+//                    shift_reg_g[0][0] <= pixel_in_g;
+                    
+//                    for(i=0; i < 2; i=i+1) begin
+//                        for(j=1; j < IMAGE_SIZE; j=j+1) begin
+//                            shift_reg_g[i][j] <= shift_reg_g[i][j-1];
+//                        end
+//                    end
+                    
+//                    //cascaded shift registers
+//                    shift_reg_g[1][0] <= shift_reg_g[0][IMAGE_SIZE-1];
+                    
+//                    data_reg_g[1][2] <= pixel_in_g; 
+//                    for(i=0; i<2; i=i+1) begin
+//                        data_reg_g[1][i] <= shift_reg_g[1-i][IMAGE_SIZE-1];
+//                    end      
+                    
+//                    for(i=0; i<3; i=i+1) begin
+//                        data_reg_g[0][i]<=data_reg_g[1][i];
+//                    end
+                    
+//                //b channel
+                
+//                    //Incoming pixel
+//                    shift_reg_b[0][0] <= pixel_in_b;
+                    
+//                    for(i=0; i < 2; i=i+1) begin
+//                        for(j=1; j < IMAGE_SIZE; j=j+1) begin
+//                            shift_reg_b[i][j] <= shift_reg_b[i][j-1];
+//                        end
+//                    end
+                    
+//                    //cascaded shift registers
+//                    shift_reg_b[1][0] <= shift_reg_b[0][IMAGE_SIZE-1];
+                    
+//                    data_reg_b[1][2] <= pixel_in_b; 
+//                    for(i=0; i<2; i=i+1) begin
+//                        data_reg_b[1][i] <= shift_reg_b[1-i][IMAGE_SIZE-1];
+//                    end      
+                    
+//                    for(i=0; i<3; i=i+1) begin
+//                        data_reg_b[0][i]<=data_reg_b[1][i];
+//                    end
+                    
+//                pixel_count <= pixel_count+1;    
+                
+//                if (col_cnt >= 1) begin 
+                
+//                    state <= STREAM;               
+                
+//                end else if (col_cnt == IMAGE_SIZE-1 && row_cnt == IMAGE_SIZE-1) begin
+    
+//                    state <= DONE;                
+                
+//                end
+                
+//                if(pixel_count == start_window_pixel_count || (col_cnt == 1 && pixel_count >= start_window_pixel_count)) begin
+                
+//                    output_win_r[2*DATA_WIDTH +: DATA_WIDTH] <= pixel_in_r;
+//                    output_win_g[2*DATA_WIDTH +: DATA_WIDTH] <= pixel_in_g;
+//                    output_win_b[2*DATA_WIDTH +: DATA_WIDTH] <= pixel_in_b;
+                    
+//                    count = 1;
+//                    for(i=0; i<2; i=i+1) begin
+                    
+//                        output_win_r[count*DATA_WIDTH +: DATA_WIDTH] <= shift_reg_r[i][IMAGE_SIZE-1];
+//                        output_win_g[count*DATA_WIDTH +: DATA_WIDTH] <= shift_reg_g[i][IMAGE_SIZE-1];
+//                        output_win_b[count*DATA_WIDTH +: DATA_WIDTH] <= shift_reg_b[i][IMAGE_SIZE-1];
+                        
+//                        count = count - 1;
+                        
+//                    end
+                   
+                    
+                
+                
+//                end
+            
+//            end
+                
+            DONE: begin
+                if(!flag) begin
+                start_conv<=1;
+                flag<=1;
+                end else begin
+                start_conv <= 0;
+                done<= 1;  
+                end     
+            
+            end
+            
+            endcase 
                     
         end
-        
-        
+         
     end 
         
 endmodule
