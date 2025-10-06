@@ -3,7 +3,7 @@
 module FIFO #(
     
     parameter DATA_WIDTH = 8,
-    parameter FIFO_DEPTH = 224,
+    parameter FIFO_DEPTH = 448,
     localparam ADDR_WIDTH = $clog2(FIFO_DEPTH)
     
     )(
@@ -19,10 +19,10 @@ module FIFO #(
 
     );
         
-    (* ram_style = "block" *)  reg [DATA_WIDTH-1:0] fifo [0:FIFO_DEPTH-1];
+    reg [DATA_WIDTH-1:0] fifo [0:FIFO_DEPTH-1];
     reg [ADDR_WIDTH-1:0] wr_ptr, rd_ptr;
     reg read_en;
-    reg [$clog2((FIFO_DEPTH*FIFO_DEPTH)/4 + 1) -1 : 0] count;
+    reg [$clog2((FIFO_DEPTH*FIFO_DEPTH)/16+1) -1 : 0] count;
     
     
     always @(posedge clk) begin
@@ -42,7 +42,7 @@ module FIFO #(
             
         
             if (valid_in) begin
-            
+                
                 fifo[wr_ptr] <= data_in;
                 wr_ptr <= (wr_ptr == FIFO_DEPTH-1) ? 0 : wr_ptr + 1;
                 
@@ -54,11 +54,11 @@ module FIFO #(
                 rd_ptr    <= (rd_ptr == FIFO_DEPTH-1) ? 0 : rd_ptr + 1;
                 valid_out <= 1;
                 count     <= count+1;
-                if (count > ((FIFO_DEPTH*FIFO_DEPTH)/4) -2) begin
+                if (count > ((FIFO_DEPTH*FIFO_DEPTH)/16) -2) begin
                     
-                    wr_ptr  <= 0;
+                    //wr_ptr  <= 0;
                     read_en <= 0;
-                
+                    
                 end
                 
             end else begin
@@ -67,7 +67,7 @@ module FIFO #(
             
             end
             
-            if (!read_en && wr_ptr > 222 ) begin
+            if (!read_en && wr_ptr > FIFO_DEPTH/2 ) begin
                 read_en   <= 1; 
                 rd_ptr    <= 0;
                 valid_out <= 0;
