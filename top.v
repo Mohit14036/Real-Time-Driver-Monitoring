@@ -2,24 +2,24 @@
 
 module top #(
     parameter DATA_WIDTH = 8,
-    parameter KERNEL_SIZE = 10
+    parameter KERNEL_SIZE = 7
     
 )(
-    input wire clk,
-    input wire rst,
-    input wire load_weight,
+    (* keep = "true" *) input wire clk,
+    (* keep = "true" *) input wire rst,
+    (* keep = "true" *) input wire load_weight,
 
     // Shared input pixels for R, G, B
-    input wire [DATA_WIDTH-1:0] pixel_in_r,
-    input wire [DATA_WIDTH-1:0] pixel_in_g,
-    input wire [DATA_WIDTH-1:0] pixel_in_b,
+    (* keep = "true" *) input wire [DATA_WIDTH-1:0] pixel_in_r,
+    (* keep = "true" *) input wire [DATA_WIDTH-1:0] pixel_in_g,
+    (* keep = "true" *) input wire [DATA_WIDTH-1:0] pixel_in_b,
     
-    input pixel_valid_r,
-    input pixel_valid_g,
-    input pixel_valid_b,
+    (* keep = "true" *) input pixel_valid_r,
+    (* keep = "true" *) input pixel_valid_g,
+    (* keep = "true" *) input pixel_valid_b,
 
     // Output of 64 parallel convolutions
-    output wire [(3*(2*(2*DATA_WIDTH+8)+8))-1:0] conv_outs_rgb_2
+    (* keep = "true" *) output wire [(3*(2*(2*DATA_WIDTH+8)+8))-1:0] conv_outs_rgb_2
   
 );
 
@@ -27,18 +27,18 @@ module top #(
     localparam [KERNEL_SIZE*KERNEL_SIZE*DATA_WIDTH-1:0] CONST_ONES         = {KERNEL_SIZE*KERNEL_SIZE{8'd1}};  // 9 weights of value 1
     localparam [KERNEL_SIZE*KERNEL_SIZE*(2*DATA_WIDTH+8)-1:0] CONST_ONES_2 = {KERNEL_SIZE*KERNEL_SIZE{22'd1}};  // 9 weights of value 1
     
-    wire total_window_done;
-    wire start_conv;
-    wire col;
-    wire [KERNEL_SIZE*KERNEL_SIZE*DATA_WIDTH-1:0] input_win_r;
-    wire [KERNEL_SIZE*KERNEL_SIZE*DATA_WIDTH-1:0] input_win_g;
-    wire [KERNEL_SIZE*KERNEL_SIZE*DATA_WIDTH-1:0] input_win_b;
+    (* keep = "true" *) wire total_window_done;
+    (* keep = "true" *) wire start_conv;
+    (* keep = "true" *) wire col;
+    (* keep = "true" *) wire [KERNEL_SIZE*KERNEL_SIZE*DATA_WIDTH-1:0] input_win_r;
+    (* keep = "true" *) wire [KERNEL_SIZE*KERNEL_SIZE*DATA_WIDTH-1:0] input_win_g;
+    (* keep = "true" *) wire [KERNEL_SIZE*KERNEL_SIZE*DATA_WIDTH-1:0] input_win_b;
     
     
-    wire start_fifo[2:0];
-    reg fifo_valid [2:0];
+    (* keep = "true" *) wire start_fifo[2:0];
+    (* keep = "true" *) reg fifo_valid [2:0];
  
-    (* dont_touch = "true" *) rgb_window_generator #(.DATA_WIDTH(DATA_WIDTH),.IMAGE_SIZE(224),.KERNEL_SIZE(10)) window (
+    (* dont_touch = "true" *) rgb_window_generator #(.DATA_WIDTH(DATA_WIDTH),.IMAGE_SIZE(224),.KERNEL_SIZE(KERNEL_SIZE)) window (
             
                 .clk(clk),
                 .rst(rst),
@@ -54,17 +54,17 @@ module top #(
                 .done(total_window_done),
                 .start_conv(start_conv)
             );
-    wire  [(3*(2*DATA_WIDTH+8))-1:0] conv_outs_rgb;
+    (* keep = "true" *) wire  [(3*(2*DATA_WIDTH+8))-1:0] conv_outs_rgb;
     
     genvar i;
     generate
         for (i = 0; i < 3; i = i + 1) begin : conv_filters
-            wire [KERNEL_SIZE*KERNEL_SIZE*DATA_WIDTH-1:0] wr = CONST_ONES;
-            wire [KERNEL_SIZE*KERNEL_SIZE*DATA_WIDTH-1:0] wg = CONST_ONES;
-            wire [KERNEL_SIZE*KERNEL_SIZE*DATA_WIDTH-1:0] wb = CONST_ONES;
+            (* keep = "true" *) wire [KERNEL_SIZE*KERNEL_SIZE*DATA_WIDTH-1:0] wr = CONST_ONES;
+            (* keep = "true" *) wire [KERNEL_SIZE*KERNEL_SIZE*DATA_WIDTH-1:0] wg = CONST_ONES;
+            (* keep = "true" *) wire [KERNEL_SIZE*KERNEL_SIZE*DATA_WIDTH-1:0] wb = CONST_ONES;
 
             
-            (* dont_touch = "true" *) rgb_conv #(.DATA_WIDTH(DATA_WIDTH), .KERNEL_SIZE(10)) conv_unit (
+            (* dont_touch = "true" *) rgb_conv #(.DATA_WIDTH(DATA_WIDTH), .KERNEL_SIZE(KERNEL_SIZE)) conv_unit (
                 .clk(clk),
                 .rst(rst),
                 .start_conv(start_conv),
@@ -90,20 +90,20 @@ module top #(
         end
     endgenerate
    
-    wire [(2*DATA_WIDTH+8)-1:0] pixel_in_r_2;
-    wire [(2*DATA_WIDTH+8)-1:0] pixel_in_g_2;
-    wire [(2*DATA_WIDTH+8)-1:0] pixel_in_b_2;
+    (* keep = "true" *) wire [(2*DATA_WIDTH+8)-1:0] pixel_in_r_2;
+    (* keep = "true" *) wire [(2*DATA_WIDTH+8)-1:0] pixel_in_g_2;
+    (* keep = "true" *) wire [(2*DATA_WIDTH+8)-1:0] pixel_in_b_2;
     
-    wire pixel_valid_r_2;
-    wire pixel_valid_g_2;
-    wire pixel_valid_b_2;
+    (* keep = "true" *) wire pixel_valid_r_2;
+    (* keep = "true" *) wire pixel_valid_g_2;
+    (* keep = "true" *) wire pixel_valid_b_2;
     
-    wire [KERNEL_SIZE*KERNEL_SIZE*(2*DATA_WIDTH+8)-1:0] input_win_r_2;
-    wire [KERNEL_SIZE*KERNEL_SIZE*(2*DATA_WIDTH+8)-1:0] input_win_g_2;
-    wire [KERNEL_SIZE*KERNEL_SIZE*(2*DATA_WIDTH+8)-1:0] input_win_b_2;
+    (* keep = "true" *) wire [KERNEL_SIZE*KERNEL_SIZE*(2*DATA_WIDTH+8)-1:0] input_win_r_2;
+    (* keep = "true" *) wire [KERNEL_SIZE*KERNEL_SIZE*(2*DATA_WIDTH+8)-1:0] input_win_g_2;
+    (* keep = "true" *) wire [KERNEL_SIZE*KERNEL_SIZE*(2*DATA_WIDTH+8)-1:0] input_win_b_2;
     
-    wire total_window_done_2;
-    wire start_conv_2;
+    (* keep = "true" *) wire total_window_done_2;
+    (* keep = "true" *) wire start_conv_2;
     
    
     
@@ -175,10 +175,10 @@ module top #(
         end
     end*/
 
-    wire start_fifo_2[2:0];
-    reg fifo_valid_2;
+    (* keep = "true" *) wire start_fifo_2[2:0];
+    (* keep = "true" *) reg fifo_valid_2 [2:0];
     
-    (* dont_touch = "true" *) rgb_window_generator #(.DATA_WIDTH((2*DATA_WIDTH+8)),.IMAGE_SIZE(222), .KERNEL_SIZE(10)) window1 (
+    (* dont_touch = "true" *) rgb_window_generator #(.DATA_WIDTH((2*DATA_WIDTH+8)),.IMAGE_SIZE(222), .KERNEL_SIZE(KERNEL_SIZE)) window1 (
             
                 .clk(clk),
                 .rst(rst),
@@ -199,13 +199,13 @@ module top #(
     genvar j;
     generate
         for (j = 0; j < 3; j = j + 1) begin : conv_filters1
-            wire [KERNEL_SIZE*KERNEL_SIZE*(2*DATA_WIDTH+8)-1:0] wr = CONST_ONES_2;
-            wire [KERNEL_SIZE*KERNEL_SIZE*(2*DATA_WIDTH+8)-1:0] wg = CONST_ONES_2;
-            wire [KERNEL_SIZE*KERNEL_SIZE*(2*DATA_WIDTH+8)-1:0] wb = CONST_ONES_2;
+            (* keep = "true" *) wire [KERNEL_SIZE*KERNEL_SIZE*(2*DATA_WIDTH+8)-1:0] wr = CONST_ONES_2;
+            (* keep = "true" *) wire [KERNEL_SIZE*KERNEL_SIZE*(2*DATA_WIDTH+8)-1:0] wg = CONST_ONES_2;
+            (* keep = "true" *) wire [KERNEL_SIZE*KERNEL_SIZE*(2*DATA_WIDTH+8)-1:0] wb = CONST_ONES_2;
 
             
 
-            (* dont_touch = "true" *) rgb_conv #(.DATA_WIDTH((2*DATA_WIDTH+8)), .KERNEL_SIZE(10)) conv_unit1 (
+            (* dont_touch = "true" *) rgb_conv #(.DATA_WIDTH((2*DATA_WIDTH+8)), .KERNEL_SIZE(KERNEL_SIZE)) conv_unit1 (
                 .clk(clk),
                 .rst(rst),
                 .start_conv(start_conv_2),
@@ -224,7 +224,7 @@ module top #(
             
             always @(posedge clk) begin 
             
-                fifo_valid_2 <= start_fifo_2[j];
+                fifo_valid_2[j] <= start_fifo_2[j];
             
             end
             //assign conv_outs_2[(j+1)*(2*DATA_WIDTH+6)-1 -: (2*DATA_WIDTH+6)] = conv_out_i_2;
