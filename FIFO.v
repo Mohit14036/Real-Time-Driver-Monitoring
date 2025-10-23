@@ -8,21 +8,21 @@ module FIFO #(
     
     )(
     
-    input clk,
-    input rst,
+    (* keep = "true" *) input clk,
+    (* keep = "true" *) input rst,
 
-    input [DATA_WIDTH-1:0] data_in,
-    input                  valid_in,
+    (* keep = "true" *) input [DATA_WIDTH-1:0] data_in,
+    (* keep = "true" *) input                  valid_in,
 
-    output reg [DATA_WIDTH-1:0] data_out,
-    output reg                  valid_out
+    (* keep = "true" *) output reg [DATA_WIDTH-1:0] data_out,
+    (* keep = "true" *) output reg                  valid_out
 
     );
         
-    reg [DATA_WIDTH-1:0] fifo [0:FIFO_DEPTH-1];
-    reg [ADDR_WIDTH-1:0] wr_ptr, rd_ptr;
-    reg read_en;
-    reg [$clog2((FIFO_DEPTH*FIFO_DEPTH)/16+1) -1 : 0] count;
+    (* keep = "true" *) reg [DATA_WIDTH-1:0] fifo [0:FIFO_DEPTH-1];
+    (* keep = "true" *) reg [ADDR_WIDTH-1:0] wr_ptr, rd_ptr;
+    (* keep = "true" *) reg read_en;
+    (* keep = "true" *) reg [$clog2((FIFO_DEPTH*FIFO_DEPTH)/16+1) -1 : 0] count;
     
     
     always @(posedge clk) begin
