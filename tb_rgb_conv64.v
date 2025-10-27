@@ -27,13 +27,14 @@ module tb_rgb_conv64;
     parameter DATA_WIDTH = 8;
     parameter HEIGHT = 224;
     parameter WIDTH = 224;
-    parameter NUM_FILTERS = 3;
+    parameter NUM_FILTERS = 1;
+    parameter INPUT_CHANNELS_LAYER1 = 3;
 
     reg clk, rst, load_weight;
-    reg [DATA_WIDTH-1:0] pixel_in_r, pixel_in_g, pixel_in_b;
-    reg pixel_valid_r, pixel_valid_g, pixel_valid_b;
+    reg [INPUT_CHANNELS_LAYER1*DATA_WIDTH-1:0] pixel_in_flat;
+    reg [INPUT_CHANNELS_LAYER1-1:0] pixel_valid_flat;
     //reg [9*DATA_WIDTH-1:0] weights_r, weights_g, weights_b;
-    wire [(NUM_FILTERS*(2*(2*DATA_WIDTH+6)+6))-1:0] conv_outs_rgb_2;
+    wire [(NUM_FILTERS*(2*(2*DATA_WIDTH+8)+8))-1:0] conv_outs_rgb_2;
 
     reg [7:0] image_r [0:HEIGHT*WIDTH];
     reg [7:0] image_g [0:HEIGHT*WIDTH];
@@ -61,16 +62,12 @@ module tb_rgb_conv64;
         .clk(clk),
         .rst(rst),
         .load_weight(load_weight),
-        .pixel_in_r(pixel_in_r),
-        .pixel_in_g(pixel_in_g),
-        .pixel_in_b(pixel_in_b),
-        .pixel_valid_r(pixel_valid_r),
-        .pixel_valid_g(pixel_valid_g),
-        .pixel_valid_b(pixel_valid_b),
+        .pixel_in_flat(pixel_in_flat),
+        .pixel_valid_flat(pixel_valid_flat),
         //.weights_r_all(weights_r_all),
         //.weights_g_all(weights_g_all),
         //.weights_b_all(weights_b_all),
-        .conv_outs_rgb_2(conv_outs_rgb_2)
+        .conv_outs_layer2(conv_outs_rgb_2)
     );
 
     // Initial block
@@ -87,9 +84,7 @@ module tb_rgb_conv64;
         // Wait and release reset
         #20 rst = 0;
         
-        pixel_valid_r = 0;
-        pixel_valid_g = 0;
-        pixel_valid_b = 0;
+        pixel_valid_flat = 0;
         
         // Load image from memory files
         $readmemh("/home/ihs03/pixel_level_systolic_array/image_r.mem", image_r);
@@ -112,28 +107,22 @@ module tb_rgb_conv64;
 //        pixel_in_r = 8'b0;
 //        pixel_in_g = 8'b0;
 //        pixel_in_b = 8'b0;
-        pixel_valid_r = 1;
-        pixel_valid_g = 1;
-        pixel_valid_b = 1;
+//        pixel_valid_r = 1;
+//        pixel_valid_g = 1;
+//        pixel_valid_b = 1;
         
         
         for(i = 0; i < WIDTH*HEIGHT; i=i+1) begin
         
             @(posedge clk);
         
-            pixel_in_r = image_r[i];
-            pixel_in_g = image_g[i];
-            pixel_in_b = image_b[i];
+            pixel_in_flat = {image_r[i],image_g[i],image_b[i]};
             
-            pixel_valid_r = 1;
-            pixel_valid_g = 1;
-            pixel_valid_b = 1;
+            pixel_valid_flat = 3'b111;
         
         end
         @(posedge clk);
-        pixel_valid_r = 0;
-        pixel_valid_g = 0;
-        pixel_valid_b = 0;
+        pixel_valid_flat = 0;
         
         $fclose(out_file);
         $display("Output written to output_112x112x64.txt");
