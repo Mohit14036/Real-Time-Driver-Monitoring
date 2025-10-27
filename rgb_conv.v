@@ -2,7 +2,9 @@
 
 module rgb_conv #(
     parameter DATA_WIDTH = 8,
-    parameter KERNEL_SIZE = 10
+    parameter KERNEL_SIZE = 10,
+    parameter INPUT_CHANNELS = 3
+
 )(
     (* keep = "true" *) input wire clk,
     (* keep = "true" *) input wire rst,
@@ -10,14 +12,9 @@ module rgb_conv #(
     (* keep = "true" *) input wire start_conv,
 
     // Each color has 3x1 inputs per clock (3 rows)
-    (* keep = "true" *) input wire [KERNEL_SIZE*KERNEL_SIZE*DATA_WIDTH-1:0] input_win_r,
-    (* keep = "true" *) input wire [KERNEL_SIZE*KERNEL_SIZE*DATA_WIDTH-1:0] input_win_g,
-    (* keep = "true" *) input wire [KERNEL_SIZE*KERNEL_SIZE*DATA_WIDTH-1:0] input_win_b,
+    (* keep = "true" *)input wire [INPUT_CHANNELS*KERNEL_SIZE*KERNEL_SIZE*DATA_WIDTH-1:0] input_win_flat,
 
-    // Each color has its own 3x3 kernel
-    (* keep = "true" *) input wire [KERNEL_SIZE*KERNEL_SIZE*DATA_WIDTH-1:0] weights_r,
-    (* keep = "true" *) input wire [KERNEL_SIZE*KERNEL_SIZE*DATA_WIDTH-1:0] weights_g,
-    (* keep = "true" *) input wire [KERNEL_SIZE*KERNEL_SIZE*DATA_WIDTH-1:0] weights_b,
+    (* keep = "true" *) input wire [INPUT_CHANNELS*KERNEL_SIZE*KERNEL_SIZE*DATA_WIDTH-1:0] weights_flat,
 
     (* keep = "true" *) output reg [(2*DATA_WIDTH+8):0] conv_outs_rgb,
     (* keep = "true" *) output reg start_fifo
@@ -25,55 +22,48 @@ module rgb_conv #(
     
 );
 
-     (* keep = "true" *) wire [2*DATA_WIDTH+6:0] conv_r;
-     (* keep = "true" *) wire [2*DATA_WIDTH+6:0] conv_g;
-     (* keep = "true" *) wire [2*DATA_WIDTH+6:0] conv_b;
+     (* keep = "true" *) wire [2*DATA_WIDTH+6:0] conv_out [INPUT_CHANNELS-1:0];
+     (* keep = "true" *) wire [INPUT_CHANNELS-1:0] conv_valid;
+     (* keep = "true" *) reg [(2*DATA_WIDTH+8):0] conv_outs;
 
-    // Instantiate systolic array for Red channel
-    (* dont_touch = "true" *) conv #(.DATA_WIDTH(DATA_WIDTH), .KERNEL_SIZE(KERNEL_SIZE)) red_array (
-        .clk(clk),
-        .rst(rst),
-        .load_weight(load_weight),
-        .input_col(input_win_r),
-        .filter_weights(weights_r),
-        .conv_out(conv_r),
-        .conv_valid(conv_valid_r)
-    );
+    genvar i;
+    generate
+        for (i = 0; i < INPUT_CHANNELS; i = i + 1) begin : conv_channels
+            // Extract per-channel window and weights from flattened input
+            wire [KERNEL_SIZE*KERNEL_SIZE*DATA_WIDTH-1:0] input_channel = 
+                input_win_flat[(i+1)*KERNEL_SIZE*KERNEL_SIZE*DATA_WIDTH-1 -: KERNEL_SIZE*KERNEL_SIZE*DATA_WIDTH];
+            wire [KERNEL_SIZE*KERNEL_SIZE*DATA_WIDTH-1:0] weight_channel = 
+                weights_flat[(i+1)*KERNEL_SIZE*KERNEL_SIZE*DATA_WIDTH-1 -: KERNEL_SIZE*KERNEL_SIZE*DATA_WIDTH];
 
-    // Instantiate systolic array for Green channel
-    (* dont_touch = "true" *) conv #(.DATA_WIDTH(DATA_WIDTH), .KERNEL_SIZE(KERNEL_SIZE)) green_array (
-        .clk(clk),
-        .rst(rst),
-        .load_weight(load_weight),
-        .input_col(input_win_g),
-        .filter_weights(weights_g),
-        .conv_out(conv_g),
-        .conv_valid(conv_valid_g)
-    );
-
-    // Instantiate systolic array for Blue channel
-    (* dont_touch = "true" *) conv #(.DATA_WIDTH(DATA_WIDTH), .KERNEL_SIZE(KERNEL_SIZE)) blue_array (
-        .clk(clk),
-        .rst(rst),
-        .load_weight(load_weight),
-        .input_col(input_win_b),
-        .filter_weights(weights_b),
-        .conv_out(conv_b),
-        .conv_valid(conv_valid_b)
-    );
+            // Instantiate single-channel convolution
+              (* dont_touch = "true" *)  conv #(
+                .DATA_WIDTH(DATA_WIDTH),
+                .KERNEL_SIZE(KERNEL_SIZE)
+            ) conv_unit (
+                .clk(clk),
+                .rst(rst),
+                .load_weight(load_weight),
+                .input_col(input_channel),
+                .filter_weights(weight_channel),
+                .conv_out(conv_out[i]),
+                .conv_valid(conv_valid[i])
+            );
+        end
+    endgenerate
     
+    integer j;
     always@ (posedge clk) begin 
         start_fifo <= start_conv;
         if(rst) begin
             conv_outs_rgb <= 0;
         end
         
-        else if(conv_valid_r && conv_valid_g && conv_valid_b) begin
-        
-            conv_outs_rgb[1*(2*DATA_WIDTH+8)-1 -: 2*DATA_WIDTH+8] <= conv_r + conv_g + conv_b;
-          //  conv_outs_rgb[2*(2*DATA_WIDTH+6)-1 -: 2*DATA_WIDTH+6] <= conv_r + conv_g + conv_b;
-            //conv_outs_rgb[3*(2*DATA_WIDTH+6)-1 -: 2*DATA_WIDTH+6] <= conv_r + conv_g + conv_b;
-            
+        else if(&conv_valid) begin
+            conv_outs = 0;
+            for (j = 0; j < INPUT_CHANNELS; j = j + 1) begin
+                    conv_outs = conv_outs + conv_out[j];
+            end 
+            conv_outs_rgb <= conv_outs;        
         end 
     
     end
