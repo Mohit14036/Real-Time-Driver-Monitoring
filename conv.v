@@ -1,6 +1,6 @@
 `timescale 1ns / 1ps
 
-(* use_dsp = "yes" *) module conv #(
+module conv #(
     parameter DATA_WIDTH = 8,
     parameter KERNEL_SIZE = 10
 )(
