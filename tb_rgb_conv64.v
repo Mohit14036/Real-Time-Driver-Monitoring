@@ -26,7 +26,7 @@ module tb_rgb_conv64;
 
     parameter DATA_WIDTH = 8;
     parameter HEIGHT = 224;
-    parameter WIDTH = 224;
+    parameter WIDTH =224;
     parameter NUM_FILTERS = 1;
     parameter INPUT_CHANNELS_LAYER1 = 3;
 
@@ -67,7 +67,7 @@ module tb_rgb_conv64;
         //.weights_r_all(weights_r_all),
         //.weights_g_all(weights_g_all),
         //.weights_b_all(weights_b_all),
-        .conv_outs_layer2(conv_outs_rgb_2)
+        .conv_outs_rgb_2(conv_outs_rgb_2)
     );
 
     // Initial block
@@ -90,6 +90,10 @@ module tb_rgb_conv64;
         $readmemh("/home/ihs03/pixel_level_systolic_array/image_r.mem", image_r);
         $readmemh("/home/ihs03/pixel_level_systolic_array/image_g.mem", image_g);
         $readmemh("/home/ihs03/pixel_level_systolic_array/image_b.mem", image_b);
+        
+        //$readmemh("/home/ihs03/pixelLevel_Pipelined_2Layers/image_r.mem", image_r);
+        //$readmemh("/home/ihs03/pixelLevel_Pipelined_2Layers/image_g.mem", image_g);
+        //$readmemh("/home/ihs03/pixelLevel_Pipelined_2Layers/image_b.mem", image_b);
        @(posedge clk);
         // Load weights
         load_weight = 1;
