@@ -69,13 +69,7 @@ module rgb_window_generator #(
             default: next_state = IDLE;
         endcase
     end */
-    wire [DATA_WIDTH-1:0] pixel_in [0:INPUT_CHANNELS-1];
-    generate
-        genvar gch;
-        for (gch = 0; gch < INPUT_CHANNELS; gch = gch + 1) begin
-            assign pixel_in[gch] = pixel_in_flat[gch*DATA_WIDTH +: DATA_WIDTH];
-        end
-    endgenerate
+
     
     always @(posedge clk) begin
     
@@ -123,7 +117,7 @@ module rgb_window_generator #(
                     state <= STREAM;
                     col_cnt <= 0;
                     for(ch=0; ch<INPUT_CHANNELS; ch=ch+1) begin
-                            shift_reg[ch][0][0] <= pixel_in[ch];
+                            shift_reg[ch][0][0] <= pixel_in_flat[ch*DATA_WIDTH +: DATA_WIDTH];
                     end
                 
                 end
@@ -146,7 +140,7 @@ module rgb_window_generator #(
             
                 for(ch=0; ch<INPUT_CHANNELS; ch=ch+1) begin                  
                     //Incoming pixel
-                    shift_reg[ch][0][0] <= pixel_in[ch];
+                    shift_reg[ch][0][0] <= pixel_in_flat[ch*DATA_WIDTH +: DATA_WIDTH];
                         
                     for (i=1; i<KERNEL_SIZE-1; i=i+1)  begin
                         shift_reg[ch][i][0] <= shift_reg[ch][i-1][IMAGE_SIZE-1];
@@ -159,7 +153,7 @@ module rgb_window_generator #(
                         end
                     end          
                     
-                    data_reg[ch][KERNEL_SIZE-2][KERNEL_SIZE-1] <= pixel_in[ch]; 
+                    data_reg[ch][KERNEL_SIZE-2][KERNEL_SIZE-1] <= pixel_in_flat[ch*DATA_WIDTH +: DATA_WIDTH]; 
                     
                     for(i=0; i<KERNEL_SIZE-1; i=i+1) begin
                         data_reg[ch][KERNEL_SIZE-2][i] <= shift_reg[ch][KERNEL_SIZE-2-i][IMAGE_SIZE-1];
@@ -198,19 +192,19 @@ module rgb_window_generator #(
                     
                     end
                     for(ch=0; ch<INPUT_CHANNELS; ch=ch+1) begin
-                        output_win_flat[ch*(KERNEL_SIZE*KERNEL_SIZE-1)*DATA_WIDTH +: DATA_WIDTH] <= pixel_in[ch];
+                        output_win_flat[((ch+1)*KERNEL_SIZE*KERNEL_SIZE-1)*DATA_WIDTH +: DATA_WIDTH] <= pixel_in_flat[ch*DATA_WIDTH +: DATA_WIDTH];
                         
                         //count = KERNEL_SIZE*KERNEL_SIZE-2;
                         for(i=0; i<(KERNEL_SIZE-1); i=i+1) begin
                         
-                            output_win_flat[ch*(KERNEL_SIZE*KERNEL_SIZE-2-i)*DATA_WIDTH +: DATA_WIDTH] <= shift_reg[ch][i][IMAGE_SIZE-1]; 
+                            output_win_flat[((ch+1)*KERNEL_SIZE*KERNEL_SIZE-2-i)*DATA_WIDTH +: DATA_WIDTH] <= shift_reg[ch][i][IMAGE_SIZE-1]; 
                             //count = count - 1;
                             
                         end
                          //count = KERNEL_SIZE*KERNEL_SIZE-KERNEL_SIZE-1;
                         for(i=0; i<KERNEL_SIZE-1; i=i+1) begin
                             for(j=0; j<KERNEL_SIZE; j=j+1) begin
-                                output_win_flat[ch*(KERNEL_SIZE*KERNEL_SIZE-KERNEL_SIZE-1-(KERNEL_SIZE*i+j))*DATA_WIDTH +: DATA_WIDTH] <= data_reg[ch][KERNEL_SIZE-2-i][KERNEL_SIZE-1-j];
+                                output_win_flat[((ch+1)*KERNEL_SIZE*KERNEL_SIZE-KERNEL_SIZE-1-(KERNEL_SIZE*i+j))*DATA_WIDTH +: DATA_WIDTH] <= data_reg[ch][KERNEL_SIZE-2-i][KERNEL_SIZE-1-j];
                               
                                 //count = count - 1;
                             end                    
@@ -243,7 +237,7 @@ module rgb_window_generator #(
                 
                 for(ch=0; ch<INPUT_CHANNELS; ch=ch+1) begin                  
                         //Incoming pixel
-                        shift_reg[ch][0][0] <= pixel_in[ch];
+                        shift_reg[ch][0][0] <= pixel_in_flat[ch*DATA_WIDTH +: DATA_WIDTH];
                             
                         for (i=1; i<KERNEL_SIZE-1; i=i+1)  begin
                             shift_reg[ch][i][0] <= shift_reg[ch][i-1][IMAGE_SIZE-1];
@@ -256,7 +250,7 @@ module rgb_window_generator #(
                             end
                         end          
                         
-                        data_reg[ch][KERNEL_SIZE-2][KERNEL_SIZE-1] <= pixel_in[ch]; 
+                        data_reg[ch][KERNEL_SIZE-2][KERNEL_SIZE-1] <= pixel_in_flat[ch*DATA_WIDTH +: DATA_WIDTH]; 
                         
                         for(i=0; i<KERNEL_SIZE-1; i=i+1) begin
                             data_reg[ch][KERNEL_SIZE-2][i] <= shift_reg[ch][KERNEL_SIZE-2-i][IMAGE_SIZE-1];
@@ -284,19 +278,19 @@ module rgb_window_generator #(
                 if(pixel_count == start_window_pixel_count || (col_cnt == KERNEL_SIZE-2 && pixel_count >= start_window_pixel_count)) begin
                 
                     for(ch=0; ch<INPUT_CHANNELS; ch=ch+1) begin
-                        output_win_flat[ch*(KERNEL_SIZE*KERNEL_SIZE-1)*DATA_WIDTH +: DATA_WIDTH] <= pixel_in[ch];
+                        output_win_flat[((ch+1)*KERNEL_SIZE*KERNEL_SIZE-1)*DATA_WIDTH +: DATA_WIDTH] <= pixel_in_flat[ch*DATA_WIDTH +: DATA_WIDTH];
                         
                         //count = KERNEL_SIZE*KERNEL_SIZE-2;
                         for(i=0; i<(KERNEL_SIZE-1); i=i+1) begin
                         
-                            output_win_flat[ch*(KERNEL_SIZE*KERNEL_SIZE-2-i)*DATA_WIDTH +: DATA_WIDTH] <= shift_reg[ch][i][IMAGE_SIZE-1]; 
+                            output_win_flat[((ch+1)*KERNEL_SIZE*KERNEL_SIZE-2-i)*DATA_WIDTH +: DATA_WIDTH] <= shift_reg[ch][i][IMAGE_SIZE-1]; 
                             //count = count - 1;
                             
                         end
                          //count = KERNEL_SIZE*KERNEL_SIZE-KERNEL_SIZE-1;
                         for(i=0; i<KERNEL_SIZE-1; i=i+1) begin
                             for(j=0; j<KERNEL_SIZE; j=j+1) begin
-                                output_win_flat[ch*(KERNEL_SIZE*KERNEL_SIZE-KERNEL_SIZE-1-(KERNEL_SIZE*i+j))*DATA_WIDTH +: DATA_WIDTH] <= data_reg[ch][KERNEL_SIZE-2-i][KERNEL_SIZE-1-j];
+                                output_win_flat[((ch+1)*KERNEL_SIZE*KERNEL_SIZE-KERNEL_SIZE-1-(KERNEL_SIZE*i+j))*DATA_WIDTH +: DATA_WIDTH] <= data_reg[ch][KERNEL_SIZE-2-i][KERNEL_SIZE-1-j];
                               
                                 //count = count - 1;
                             end                    
