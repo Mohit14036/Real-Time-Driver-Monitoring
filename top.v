@@ -18,13 +18,13 @@ module top #(
     (* keep = "true" *)input wire [INPUT_CHANNELS_LAYER1-1:0] pixel_valid_flat,
 
     // Output of 64 parallel convolutions
-    (* keep = "true" *) output wire [(3*(2*(2*DATA_WIDTH+8)+8))-1:0] conv_outs_rgb_2
+    (* keep = "true" *) output wire [(1*(2*(2*DATA_WIDTH+8)+8))-1:0] conv_outs_rgb_2
   
 );
 
     // Constant 9x1s vector for weights per channel (72 bits if DATA_WIDTH = 8)
-    localparam [KERNEL_SIZE*KERNEL_SIZE*DATA_WIDTH-1:0] CONST_ONES         = {KERNEL_SIZE*KERNEL_SIZE{8'd1}};  // 9 weights of value 1
-    localparam [KERNEL_SIZE*KERNEL_SIZE*(2*DATA_WIDTH+8)-1:0] CONST_ONES_2 = {KERNEL_SIZE*KERNEL_SIZE{22'd1}};  // 9 weights of value 1
+    //localparam [KERNEL_SIZE*KERNEL_SIZE*DATA_WIDTH-1:0] CONST_ONES         = {KERNEL_SIZE*KERNEL_SIZE{8'd1}};  // 9 weights of value 1
+    //localparam [KERNEL_SIZE*KERNEL_SIZE*(2*DATA_WIDTH+8)-1:0] CONST_ONES_2 = {KERNEL_SIZE*KERNEL_SIZE{22'd1}};  // 9 weights of value 1
     
     (* keep = "true" *) wire total_window_done;
     (* keep = "true" *) wire start_conv;
@@ -83,21 +83,9 @@ module top #(
     
     (* keep = "true" *) wire total_window_done_2;
     (* keep = "true" *) wire start_conv_2;
-    (* keep = "true" *) wire [(2*DATA_WIDTH+8)-1:0] fifo_out_layer1[FILTERS_LAYER1-1:0];
-    (* keep = "true" *) wire fifo_valid_out_layer1[FILTERS_LAYER1-1:0];    
-   // Flatten FIFO outputs to feed layer2 window generator
-    generate
-        for (i = 0; i < INPUT_CHANNELS_LAYER2; i = i + 1) begin : flatten_layer2_pixels
-            assign layer2_pixel_flat[(i+1)*(2*DATA_WIDTH+8)-1 -: (2*DATA_WIDTH+8)] = fifo_out_layer1[i];
-        end
-    endgenerate
-    
-    generate
-        for (i = 0; i < INPUT_CHANNELS_LAYER2; i = i + 1) begin
-            assign layer2_pixel_valid_flat[i] = fifo_valid_out_layer1[i];
-        end
-    endgenerate 
-    
+  
+
+
     generate 
         for (i = 0; i < FILTERS_LAYER1; i = i + 1) begin : fifo_layer1_gen
             (* dont_touch = "true" *) FIFO #(.DATA_WIDTH(2*DATA_WIDTH+8), .FIFO_DEPTH(222*2*(KERNEL_SIZE-1))) fifo_inst (
@@ -106,10 +94,10 @@ module top #(
                         .rst(rst),
                         
                         .data_in(conv_outs_rgb[(i+1)*(2*DATA_WIDTH+8)-1 -: (2*DATA_WIDTH+8)]),
-                        .valid_in(fifo_valid[i]),
+                        .valid_in(fifo_valid[0]),
                         
-                        .data_out(fifo_out_layer1[i]),
-                        .valid_out(fifo_valid_out_layer1[i])
+                        .data_out(layer2_pixel_flat[(i+1)*(2*DATA_WIDTH+8)-1 -: (2*DATA_WIDTH+8)]),
+                        .valid_out(layer2_pixel_valid_flat[i])
                     
                     );
         end 
@@ -145,7 +133,7 @@ module top #(
     end*/
 
     
-    (* dont_touch = "true" *) rgb_window_generator #(.DATA_WIDTH((2*DATA_WIDTH+8)),.IMAGE_SIZE(222), .KERNEL_SIZE(KERNEL_SIZE), .INPUT_CHANNELS(INPUT_CHANNELS_LAYER2)) window1 (
+    (* dont_touch = "true" *) rgb_window_generator #(.DATA_WIDTH((2*DATA_WIDTH+8)),.IMAGE_SIZE(220), .KERNEL_SIZE(KERNEL_SIZE), .INPUT_CHANNELS(INPUT_CHANNELS_LAYER2)) window1 (
             
                 .clk(clk),
                 .rst(rst),
@@ -175,7 +163,7 @@ module top #(
                 .load_weight(load_weight),
                 .input_win_flat(input_win_layer2),
                 .weights_flat(weights_flat),
-                .conv_outs_rgb(conv_outs_layer2_full[(j+1)*(2*(2*DATA_WIDTH+8)+8)-1 -: (2*(2*DATA_WIDTH+8)+8)]),
+                .conv_outs_rgb(conv_outs_rgb_2[(j+1)*(2*(2*DATA_WIDTH+8)+8)-1 -: (2*(2*DATA_WIDTH+8)+8)]),
                 .start_fifo(start_fifo_layer2[j])
             );
             
@@ -184,8 +172,6 @@ module top #(
                 fifo_valid_layer2[j] <= start_fifo_layer2[j];
             
             end
-            assign conv_outs_rgb_2[(j+1)*(2*DATA_WIDTH+9)-1 -: (2*DATA_WIDTH+9)] =
-                conv_outs_layer2_full[(j+1)*(2*(2*DATA_WIDTH+8)+8)-1 -: (2*DATA_WIDTH+9)];
             //assign conv_outs_2[(j+1)*(2*DATA_WIDTH+6)-1 -: (2*DATA_WIDTH+6)] = conv_out_i_2;
         end
     endgenerate
