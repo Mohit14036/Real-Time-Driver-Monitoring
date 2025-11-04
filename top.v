@@ -4,7 +4,7 @@ module top #(
     parameter DATA_WIDTH = 8,
     parameter KERNEL_SIZE = 3,
     parameter INPUT_CHANNELS_LAYER1 = 3,    
-    parameter FILTERS_LAYER1 = 32,          
+    parameter FILTERS_LAYER1 = 64,          
     parameter INPUT_CHANNELS_LAYER2 = FILTERS_LAYER1,
     parameter FILTERS_LAYER2 = 1    
     
