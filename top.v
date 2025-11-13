@@ -1,241 +1,185 @@
-`timescale 1ns/1ps
+`timescale 1ns / 1ps
 
-module top#(
-    parameter DATA_WIDTH    = 8,
-    parameter OUT_W         = 222,
-    parameter OUT_H         = 222,
-    parameter OUTPUT_SIZE   = OUT_W*OUT_H, // 222*222
-    parameter NUM_FILTERS0  = 3,
-    parameter NUM_FILTERS1  = 3,
-    parameter RESULT_WIDTH  = 2*DATA_WIDTH+6
+module top #(
+    parameter DATA_WIDTH = 8,
+    parameter KERNEL_SIZE = 3,
+    parameter INPUT_CHANNELS_LAYER1 = 3,    
+    parameter FILTERS_LAYER1 = 3,          
+    parameter INPUT_CHANNELS_LAYER2 = FILTERS_LAYER1,
+    parameter FILTERS_LAYER2 = 1    
+    
 )(
-    input  wire clk,
-    input  wire rst,
+    (* keep = "true" *) input wire clk,
+    (* keep = "true" *) input wire rst,
+    (* keep = "true" *) input wire load_weight,
 
-    // external image stream (into Layer-1)
-    input  wire [3*DATA_WIDTH-1:0] input_col_r,
-    input  wire [3*DATA_WIDTH-1:0] input_col_g,
-    input  wire [3*DATA_WIDTH-1:0] input_col_b,
-    input  wire                    load_weight,
-    input  wire                    input_valid,
+    // Shared input pixels for R, G, B
+    (* keep = "true" *)input wire [INPUT_CHANNELS_LAYER1*DATA_WIDTH-1:0] pixel_in_flat,
+    (* keep = "true" *)input wire [INPUT_CHANNELS_LAYER1-1:0] pixel_valid_flat,
 
-    // expose BRAM read ports for BOTH layers (for TB dumping)
-    input  wire [17:0] rd_addr0_0, output wire [RESULT_WIDTH-1:0] rd_data0_0,
-    input  wire [17:0] rd_addr0_1, output wire [RESULT_WIDTH-1:0] rd_data0_1,
-    input  wire [17:0] rd_addr0_2, output wire [RESULT_WIDTH-1:0] rd_data0_2,
-
-    input  wire [17:0] rd_addr1_0, output wire [(2*RESULT_WIDTH+6)-1:0] rd_data1_0,
-    input  wire [17:0] rd_addr1_1, output wire [(2*RESULT_WIDTH+6)-1:0] rd_data1_1,
-    input  wire [17:0] rd_addr1_2, output wire [(2*RESULT_WIDTH+6)-1:0] rd_data1_2,
-    
-    input  wire [17:0] rd_addr2_0, output wire [(2*RESULT_WIDTH+6)-1:0] rd_data2_0,
-    input  wire [17:0] rd_addr2_1, output wire [(2*RESULT_WIDTH+6)-1:0] rd_data2_1,
-    input  wire [17:0] rd_addr2_2, output wire [(2*RESULT_WIDTH+6)-1:0] rd_data2_2,
-
-    output wire done0,     // Layer-1 done
-    output wire done_all   // Layer-2 done
+    // Output of 64 parallel convolutions
+    (* keep = "true" *) output wire [(FILTERS_LAYER2*(DATA_WIDTH))-1:0] conv_outs_rgb_2
+  
 );
-    reg [17:0] addr0_0, addr1_0, addr2_0;
-    reg [17:0] addr0_1, addr1_1, addr2_1;
-    reg [17:0] addr0_2, addr1_2, addr2_2;
+
+    // Constant 9x1s vector for weights per channel (72 bits if DATA_WIDTH = 8)
+    //localparam [KERNEL_SIZE*KERNEL_SIZE*DATA_WIDTH-1:0] CONST_ONES         = {KERNEL_SIZE*KERNEL_SIZE{8'd1}};  // 9 weights of value 1
+    //localparam [KERNEL_SIZE*KERNEL_SIZE*(2*DATA_WIDTH+8)-1:0] CONST_ONES_2 = {KERNEL_SIZE*KERNEL_SIZE{22'd1}};  // 9 weights of value 1
     
-    wire [RESULT_WIDTH-1:0] data0_0,data0_1,data0_2;
-    wire [RESULT_WIDTH-1:0] data1_0,data1_1,data1_2;
-    wire [RESULT_WIDTH-1:0] data2_0,data2_1,data2_2;
-
+    (* keep = "true" *) wire total_window_done;
+    (* keep = "true" *) wire start_conv;
+    (* keep = "true" *) wire col;
+    (* keep = "true" *) wire [KERNEL_SIZE*INPUT_CHANNELS_LAYER1*DATA_WIDTH-1:0] input_win_layer1;
     
-    // ---------------------------
-    // LAYER 1
-    // ---------------------------
-    rgb_conv_layer_64 #(
-        .DATA_WIDTH(DATA_WIDTH),
-        .OUTPUT_SIZE(OUTPUT_SIZE),
-        .RESULT_WIDTH(RESULT_WIDTH)
-    ) layer0 (
-        .clk(clk),
-        .rst(rst),
-        .input_col_r(input_col_r),
-        .input_col_g(input_col_g),
-        .input_col_b(input_col_b),
-        .load_weight(load_weight),
-        .input_valid(input_valid),
+    
+    (* keep = "true" *) wire start_fifo[2:0];
+    (* keep = "true" *) reg fifo_valid [2:0];
+ 
+    (* dont_touch = "true" *) rgb_window_generator #(.DATA_WIDTH(DATA_WIDTH),.IMAGE_SIZE(224),.KERNEL_SIZE(KERNEL_SIZE), 
+        .INPUT_CHANNELS(INPUT_CHANNELS_LAYER1)) window (
+            
+                .clk(clk),
+                .rst(rst),
+                .pixel_in_flat(pixel_in_flat),           // Flattened input
+                .pixel_valid_flat(pixel_valid_flat),
+                .output_win_flat(input_win_layer1),
+                .done(total_window_done),
+                .start_conv(start_conv),
+                .col(col)
+            );
+    (* keep = "true" *) wire  [(FILTERS_LAYER1*DATA_WIDTH)-1:0] conv_outs_rgb;
+    
+   genvar i;
+   generate
+       for (i = 0; i < FILTERS_LAYER1; i = i + 1) begin : conv_filters
+            (* keep = "true" *) wire [KERNEL_SIZE*KERNEL_SIZE*INPUT_CHANNELS_LAYER1*DATA_WIDTH-1:0] weights_flat = 
+                {KERNEL_SIZE*KERNEL_SIZE*INPUT_CHANNELS_LAYER1{8'd1}};
 
-        .rd_addr0_0(addr0_0), .rd_data0_0(data0_0),
-        .rd_addr1_0(addr1_0), .rd_data1_0(data1_0),
-        .rd_addr2_0(addr2_0), .rd_data2_0(data2_0),
-        
-        
-        .rd_addr0_1(addr0_1), .rd_data0_1(data0_1),
-        .rd_addr1_1(addr1_1), .rd_data1_1(data1_1),
-        .rd_addr2_1(addr2_1), .rd_data2_1(data2_1),
-        
-        
-        .rd_addr0_2(addr0_2), .rd_data0_2(data0_2),
-        .rd_addr1_2(addr1_2), .rd_data1_2(data1_2),
-        .rd_addr2_2(addr2_2), .rd_data2_2(data2_2),
-        
-        
-        
-
-        .done(done0)
-    );
-
+            
+            (* dont_touch = "true" *) rgb_conv #(.DATA_WIDTH(DATA_WIDTH), .KERNEL_SIZE(KERNEL_SIZE), .INPUT_CHANNELS(INPUT_CHANNELS_LAYER1), .IMAGE_SIZE(224)) conv_unit (
+                .clk(clk),
+                .rst(rst),
+                .start_conv(start_conv),
+                .col(col),
+            
+                .load_weight(load_weight),
+                .input_win_flat(input_win_layer1),
+                .weights_flat(weights_flat),
+                .conv_outs_rgb(conv_outs_rgb[(i+1)*DATA_WIDTH-1 -: DATA_WIDTH]),
+                .start_fifo(start_fifo[i])
+                
+            );
+            
+//            always @(posedge clk) begin 
+            
+//                fifo_valid[i] <= start_fifo[i];
+            
+//          end
+            //assign conv_outs_2[(i+1)*(2*DATA_WIDTH+6)-1 -: (2*DATA_WIDTH+6)] = conv_out_i;
+       end
+   endgenerate
    
-    reg [17:0] row, col;
-    reg        stream1_en, bram_valid_d;
-    reg        l2_input_valid;
-
-
-    reg [RESULT_WIDTH-1:0] f0 [0:2];
-    reg [RESULT_WIDTH-1:0] f1 [0:2];
-    reg [RESULT_WIDTH-1:0] f2 [0:2];
-
-    // pack into Layer-2 inputs
-    wire [3*RESULT_WIDTH-1:0] f0_col = {f0[0], f0[1], f0[2]};
-    wire [3*RESULT_WIDTH-1:0] f1_col = {f1[0], f1[1], f1[2]};
-    wire [3*RESULT_WIDTH-1:0] f2_col = {f2[0], f2[1], f2[2]};
-
+    (* keep = "true" *) wire [INPUT_CHANNELS_LAYER2*DATA_WIDTH-1:0] layer2_pixel_flat;
+    (* keep = "true" *) wire [INPUT_CHANNELS_LAYER2-1:0] layer2_pixel_valid_flat;
+    (* keep = "true" *) wire [KERNEL_SIZE*KERNEL_SIZE*INPUT_CHANNELS_LAYER2*DATA_WIDTH-1:0] input_win_layer2;
     
-    
-    
+    (* keep = "true" *) wire total_window_done_2;
+    (* keep = "true" *) wire start_conv_2;
+  
 
-    always @(posedge clk or posedge rst) begin
+
+    generate 
+        for (i = 0; i < FILTERS_LAYER1; i = i + 1) begin : fifo_layer1_gen
+            (* dont_touch = "true" *) FIFO #(.DATA_WIDTH(DATA_WIDTH), .FIFO_DEPTH(222*2*(KERNEL_SIZE-1))) fifo_inst (
+            
+                        .clk(clk),
+                        .rst(rst),
+                        
+                        .data_in(conv_outs_rgb[(i+1)*(DATA_WIDTH)-1 -: (DATA_WIDTH)]),
+                        .valid_in(start_fifo[0]),
+                        
+                        .data_out(layer2_pixel_flat[(i+1)*(DATA_WIDTH)-1 -: (DATA_WIDTH)]),
+                        .valid_out(layer2_pixel_valid_flat[i])
+                    
+                    );
+        end 
+   endgenerate         
+  
+
+            
+    /*always @(posedge clk) begin
         if (rst) begin
-            row           <= 0;
-            col           <= 0;
-            addr0_0         <= 0+1;
-            addr0_1         <= OUT_W+1;
-            addr0_2         <= 2*OUT_W+1;
-            
-            addr1_0         <= 0+1;
-            addr1_1         <= OUT_W+1;
-            addr1_2         <= 2*OUT_W+1;
+            pixel_in_r_2 <= 0;
+            pixel_in_g_2 <= 0;
+            pixel_in_b_2 <= 0;
+            pixel_valid_r_2 <= 0;
+            pixel_valid_g_2 <= 0;
+            pixel_valid_b_2 <= 0;
+        end else if (conv_outs_2_valid) begin
             
             
-            addr2_0         <= 0+1;
-            addr2_1         <= OUT_W+1;
-            addr2_2         <= 2*OUT_W+1;
             
-            stream1_en    <= 0;
-            bram_valid_d  <= 0;
-            l2_input_valid<= 0;
+            pixel_in_r_2 <= conv_outs[(1)*(2*DATA_WIDTH+6)-1 -: (2*DATA_WIDTH+6)];
+            pixel_in_g_2 <= conv_outs[(2)*(2*DATA_WIDTH+6)-1 -: (2*DATA_WIDTH+6)];
+            pixel_in_b_2 <= conv_outs[(3)*(2*DATA_WIDTH+6)-1 -: (2*DATA_WIDTH+6)];
+    
+            // Set valid flags
+            pixel_valid_r_2 <= 1;
+            pixel_valid_g_2 <= 1;
+            pixel_valid_b_2 <= 1;
         end else begin
-            if (done0 && !stream1_en) begin
-                stream1_en   <= 1;
-                row          <= 0;
-                col          <= 0;
-                
-                addr0_0         <= 0+1;
-                addr0_1         <= OUT_W+1;
-                addr0_2         <= 2*OUT_W+1;
-                
-                addr1_0         <= 0+1;
-                addr1_1         <= OUT_W+1;
-                addr1_2         <= 2*OUT_W+1;
-                
-                
-                addr2_0         <= 0+1;
-                addr2_1         <= OUT_W+1;
-                addr2_2         <= 2*OUT_W+1;
-                
-                
-                
-                bram_valid_d <= 0;
-            end else if (stream1_en) begin
-                
-                    // latch BRAM outputs
-                    f0[0] <= data0_0; 
-                    f0[1] <= data0_1; 
-                    f0[2] <= data0_2; 
-
-                    f1[0] <= data1_0; 
-                    f1[1] <= data1_1; 
-                    f1[2] <= data1_2; 
-
-                    f2[0] <= data2_0; 
-                    f2[1] <= data2_1; 
-                    f2[2] <= data2_2; 
-
-                    l2_input_valid <= 1;
-
-                    // update column/row
-                    if (col < OUT_W-1) begin
-                        col   <= col + 1;
-                        addr0_0 <= row*OUT_W     + (col+1);
-                        addr0_1 <= (row+1)*OUT_W + (col+1);
-                        addr0_2 <= (row+2)*OUT_W + (col+1);
-                        
-                        
-                        addr1_0 <= row*OUT_W     + (col+1);
-                        addr1_1 <= (row+1)*OUT_W + (col+1);
-                        addr1_2 <= (row+2)*OUT_W + (col+1);
-                        
-                        
-                        addr2_0 <= row*OUT_W     + (col+1);
-                        addr2_1 <= (row+1)*OUT_W + (col+1);
-                        addr2_2 <= (row+2)*OUT_W + (col+1);
-                    end else begin
-                        col   <= 0;
-                        row   <= row + 1;
-                        addr0_0 <= (row+1)*OUT_W;
-                        addr0_1 <= (row+2)*OUT_W;
-                        addr0_2 <= (row+3)*OUT_W;
-                        
-                        
-                        addr1_0 <= (row+1)*OUT_W;
-                        addr1_1 <= (row+2)*OUT_W;
-                        addr1_2 <= (row+3)*OUT_W;
-                        
-                        
-                        addr2_0 <= (row+1)*OUT_W;
-                        addr2_1 <= (row+2)*OUT_W;
-                        addr2_2 <= (row+3)*OUT_W;
-                    end
-
-                    // stop when rows exhausted
-                    if (row >= OUT_H-3) begin
-                        stream1_en     <= 0;
-                        l2_input_valid <= 0;
-                    end
-                    bram_valid_d <= 0;
-                end
-             else begin
-                l2_input_valid <= 0;
-            end
+            pixel_valid_r_2 <= 0;
+            pixel_valid_g_2 <= 0;
+            pixel_valid_b_2 <= 0;
         end
-    end
+    end*/
 
-    // ---------------------------
-    // LAYER 2
-    // ---------------------------
-    rgb_conv_layer_64 #(
-        .DATA_WIDTH(RESULT_WIDTH),
-        .OUTPUT_SIZE((OUT_W-2)*(OUT_H-2)),   // 220*220
-        .RESULT_WIDTH(2*RESULT_WIDTH+6)
-    ) layer1 (
-        .clk(clk),
-        .rst(rst),
-        .input_col_r(f0_col),
-        .input_col_g(f1_col),
-        .input_col_b(f2_col),
-        .load_weight(load_weight),
-        .input_valid(l2_input_valid),
+    (* keep = "true" *) wire col2;
+    
+    (* dont_touch = "true" *) rgb_window_generator #(.DATA_WIDTH((DATA_WIDTH)),.IMAGE_SIZE(222), .KERNEL_SIZE(KERNEL_SIZE), .INPUT_CHANNELS(INPUT_CHANNELS_LAYER2)) window1 (
+            
+                .clk(clk),
+                .rst(rst),
+                .pixel_in_flat(layer2_pixel_flat),
+                .pixel_valid_flat(layer2_pixel_valid_flat),
+                .output_win_flat(input_win_layer2),
+                .done(total_window_done_2),
+                .start_conv(start_conv_2),
+                .col(col2)
+               
+            );
+    (* keep = "true" *) wire [(DATA_WIDTH)*FILTERS_LAYER2-1:0] conv_outs_layer2_full;
+    (* keep = "true" *) wire start_fifo_layer2[FILTERS_LAYER2-1:0];
+    (* keep = "true" *) reg fifo_valid_layer2[FILTERS_LAYER2-1:0];
+    
+    genvar j;
+    generate
+        for (j = 0; j < FILTERS_LAYER2; j = j + 1) begin : conv_filters1
+            (* keep = "true" *)  wire [KERNEL_SIZE*KERNEL_SIZE*INPUT_CHANNELS_LAYER2*(DATA_WIDTH)-1:0] weights_flat_layer2 = 
+                {KERNEL_SIZE*KERNEL_SIZE*INPUT_CHANNELS_LAYER2{8'd1}};
 
-        .rd_addr0_0(rd_addr0_0), .rd_data0_0(rd_data0_0),
-        .rd_addr1_0(rd_addr1_0), .rd_data1_0(rd_data1_0),
-        .rd_addr2_0(rd_addr2_0), .rd_data2_0(rd_data2_0),
-        
-        
-        .rd_addr0_1(rd_addr0_1), .rd_data0_1(rd_data0_1),
-        .rd_addr1_1(rd_addr1_1), .rd_data1_1(rd_data1_1),
-        .rd_addr2_1(rd_addr2_1), .rd_data2_1(rd_data2_1),
-        
-        
-        .rd_addr0_2(rd_addr0_2), .rd_data0_2(rd_data0_2),
-        .rd_addr1_2(rd_addr1_2), .rd_data1_2(rd_data1_2),
-        .rd_addr2_2(rd_addr2_2), .rd_data2_2(rd_data2_2),
+            
 
-        .done(done_all)
-    );
+            (* dont_touch = "true" *) rgb_conv #(.DATA_WIDTH((DATA_WIDTH)), .KERNEL_SIZE(KERNEL_SIZE), .INPUT_CHANNELS(INPUT_CHANNELS_LAYER2), .IMAGE_SIZE(222)) conv_unit1 (
+                .clk(clk),
+                .rst(rst),
+                .start_conv(start_conv_2),
+                .col(col2),
+                .load_weight(load_weight),
+                .input_win_flat(input_win_layer2),
+                .weights_flat(weights_flat_layer2),
+                .conv_outs_rgb(conv_outs_rgb_2[(j+1)*(DATA_WIDTH)-1 -: (DATA_WIDTH)]),
+                .start_fifo(start_fifo_layer2[j])
+            );
+            
+            always @(posedge clk) begin 
+            
+                fifo_valid_layer2[j] <= start_fifo_layer2[j];
+            
+            end
+            //assign conv_outs_2[(j+1)*(2*DATA_WIDTH+6)-1 -: (2*DATA_WIDTH+6)] = conv_out_i_2;
+        end
+    endgenerate
+    
 
 endmodule
